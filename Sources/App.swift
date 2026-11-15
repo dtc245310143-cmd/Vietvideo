@@ -39,8 +39,10 @@ final class VoiceCheck: ObservableObject {
                 samples.withUnsafeBufferPointer { ptr in
                     buffer.floatChannelData![0].update(from: ptr.baseAddress!, count: samples.count)
                 }
-                let file = try AVAudioFile(forWriting: url, settings: format.settings)
-                try file.write(from: buffer)
+                do {
+                    let file = try AVAudioFile(forWriting: url, settings: format.settings)
+                    try file.write(from: buffer)
+                }
                 await self?.finish(url: url, elapsed: Date().timeIntervalSince(started), seconds: Double(samples.count) / 48000)
             } catch {
                 await self?.failed(error)
@@ -75,26 +77,24 @@ final class VoiceCheck: ObservableObject {
     }
 }
 
-@main
-struct VietVideoVoiceCheckApp: App {
-    @StateObject private var state = VoiceCheck()
-    @Environment(\.scenePhase) private var scenePhase
+struct VoiceCheckView: View {
+    @EnvironmentObject var state: VoiceCheck
+    @EnvironmentObject var store: ProjectStore
 
-    var body: some Scene {
-        WindowGroup {
+    var body: some View {
             NavigationStack {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 24) {
                         Text("VietVideo trên iPhone").font(.largeTitle.bold())
                         Text("Kiểm tra bộ giọng 4.4.4").font(.title2).foregroundStyle(.secondary)
-                        Text("Đây là bản kiểm tra tương thích bộ giọng, chưa có dịch hoặc xuất video. Hai giọng chạy trực tiếp trên máy; không gửi nội dung đến dịch vụ tạo giọng.")
+                        Text("Hai giọng chạy trực tiếp trên máy. Mục này vẫn chỉ đọc câu mẫu; lồng tiếng cho văn bản bất kỳ đang được chuyển tiếp.")
                         Text("Câu mẫu: Xin chào, đây là giọng thuyết minh Việt Video.")
                             .padding().frame(maxWidth: .infinity, alignment: .leading)
                             .background(.blue.opacity(0.08), in: RoundedRectangle(cornerRadius: 18))
                         Button("Tạo mẫu · Giọng thuyết minh gốc") { state.start(0) }
-                            .buttonStyle(.borderedProminent).disabled(state.busy)
+                            .buttonStyle(.borderedProminent).disabled(state.busy || store.busy)
                         Button("Tạo mẫu · Giọng giảm vọng 1") { state.start(1) }
-                            .buttonStyle(.borderedProminent).disabled(state.busy)
+                            .buttonStyle(.borderedProminent).disabled(state.busy || store.busy)
                         if state.busy { ProgressView(); Button("Dừng") { state.stop() } }
                         Text(state.status).font(.callout).textSelection(.enabled)
                         if let output = state.output {
@@ -105,10 +105,7 @@ struct VietVideoVoiceCheckApp: App {
                             .font(.footnote).foregroundStyle(.secondary)
                     }.padding(24)
                 }
-            }.onChange(of: scenePhase) { phase in
-                if phase == .background { state.stop() }
             }
-        }
     }
 }
 

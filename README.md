@@ -1,41 +1,21 @@
-# VietVideo iOS — voice compatibility gate
+# VietVideo iOS Beta 0.2
 
-**Trạng thái: kiểm tra bộ giọng, CHƯA phải bản iOS đầy đủ của VietVideo 4.4.4.**
+Bản chuyển sang iPhone đang phát triển, **chưa đủ chức năng 4.4.4 Windows**. Bản 0.1 kiểm tra hai giọng đã build và qua kiểm tra suy luận trong simulator; người dùng đã thử trên iPhone 14 Plus/iOS 27.0 và báo có vẻ ổn.
 
-Đích: iPhone 14 Plus, iOS 27.0. Build bằng GitHub Actions macOS; tạo IPA chưa ký để iLoader ký/cài. Không cần máy tính làm máy chủ khi chạy.
+Bản 0.2 thêm chọn video từ Ảnh/Tệp, lưu/mở dự án, nhận diện và dịch bằng Gemini, chọn nhiều ngôn ngữ, lưu key trong Keychain, sửa/nhập/xuất SRT, nhận diện lại khoảng thiếu theo cửa sổ 10 giây, tự thử lại tối đa 3 lần khi kết quả rỗng, xuất MP4 với phụ đề Việt và giữ âm lượng tiếng gốc. Có tùy chọn cỡ chữ/màu/vị trí và chia sẻ kết quả ra Tệp/Ảnh. Bản này chưa gọi Gemini thật trong CI.
 
-## Đã có
+Hai giọng hiện vẫn đọc câu mẫu. Chưa chuyển phát âm văn bản bất kỳ, lồng tiếng video, tìm/tải video từ link, làm mờ chữ, logo và retiming. Không dùng giọng iOS thay cho hai giọng đã chọn. Không gọi bản này là full 4.4.4.
 
-- Lõi ONNX chạy trực tiếp trên iOS bằng Swift/Accelerate, chuyển từ bộ tạo giọng v3 Turbo của bản 4.4.4.
-- Giữ hai speaker anchors và reference codes gốc; giọng thứ hai tiếp tục tắt reference codes như bản Windows.
-- Tạo, phát và chia sẻ WAV của một câu mẫu đã chuẩn hóa/tokenize bằng đúng công cụ Windows.
-- Nút dừng, kiểm tra tensor, kiểm tra âm thanh hữu hạn/không im lặng, giải phóng bộ nhớ tạm theo khung.
-- Workflow build IPA và kiểm tra suy luận của hai giọng trên simulator. IPA vẫn được lưu nếu build thiết bị đạt nhưng kiểm tra simulator thất bại.
+Video/dự án ở Tệp → Trên iPhone → VietVideo iOS → VietVideo. Gemini cần Internet, dùng hạn mức và xử lý âm thanh gửi lên Google khi người dùng bấm nhận diện/dịch. Key chỉ nằm ở Keychain, không vào GitHub hay URL yêu cầu. Giữ ứng dụng mở trong lúc xử lý; khi về nền, app yêu cầu dừng và giữ dự án/cache đã hoàn thành.
 
-## Chưa có / cần đạt trước khi làm bản đầy đủ
+## Build và cài
 
-- Chưa build trên macOS hoặc thử trên iPhone thật. Không có cam kết tương thích/chất lượng/tốc độ cho tới khi các bước đó đạt.
-- Chỉ phát câu mẫu cố định; chưa có chuẩn hóa/phát âm tiếng Việt cho văn bản bất kỳ trên iOS. Không thay bằng giọng hệ thống iOS.
-- Chưa chuyển giao diện tìm kiếm/tải YouTube, Bilibili, Douyin; Gemini; sửa SRT; nhận diện lại; trộn tiếng gốc; phụ đề; làm mờ; logo; retiming; xuất/lưu dự án.
-- Chưa phải bản thay thế Windows, không phát hành với tên “full 4.4.4”. Bản Windows gốc không bị sửa.
+Dùng workflow **VietVideo iOS beta**. Giữ Actions secret `VIETVIDEO_CALIBRATION_B64` đã thiết lập trong kho Vietvideo. Tải artifact **VietVideo-iOS-Beta-0.2**, giải nén lấy IPA, nhập iLoader để ký/cài. Bundle identifier giữ nguyên để cập nhật bản thử trước.
 
-## Build trong kho Vietvideo
+Nếu thiếu secret, chỉ kiểm tra biên dịch, không phát hành IPA thiếu bộ giọng. Các model công khai được cố định revision và kiểm tra SHA-256. Không đưa `.local` hoặc `Assets/Calibration` lên GitHub. IPA chứa dữ liệu cần tạo giọng, nên chỉ chia sẻ trong phạm vi được phép.
 
-1. Đưa các tệp được Git theo dõi lên nhánh `main`. **Không tải thư mục `.local` hoặc `Assets/Calibration` lên kho công khai.**
-2. Mở Settings → Secrets and variables → Actions → New repository secret.
-3. Tên: `VIETVIDEO_CALIBRATION_B64`. Giá trị là toàn bộ nội dung tệp `.local/calibration-secret.txt` trong bản chuẩn bị trên máy của bạn. Không gửi giá trị này vào chat.
-4. Mở Actions → **iOS voice compatibility** → Run workflow. Workflow tải model công khai được cố định phiên bản và kiểm tra SHA-256, ghép dữ liệu giọng riêng trong máy build.
-5. Khi build xong, tải artifact **VietVideo-VoiceCheck**, giải nén lấy `VietVideo-VoiceCheck-unsigned.ipa`, rồi nhập vào iLoader để ký/cài.
-6. Trên iPhone, tạo lần lượt hai mẫu, nghe và ghi lại thời gian tạo. Nếu ứng dụng bị thoát khi nạp giọng, cần xem giới hạn bộ nhớ trước khi tiếp tục phần video.
+## Kiểm tra
 
-Hai giọng chạy offline. Khi chuyển phần Gemini, nhận diện/dịch vẫn cần Internet như bản Windows.
+CI không có Gemini API key. XCTest kiểm tra SRT/Unicode/mốc thời gian, kiểm tra dữ liệu nhận diện, hai giọng ONNX, tách âm thanh, xuất phụ đề lên video ngang/dọc, tiếng gốc và hủy không phá kết quả cũ. Việc nhận diện/dịch thực tế và chất lượng trên iPhone vẫn cần kiểm tra bằng key của người dùng.
 
-## Dữ liệu và giấy phép
-
-Không có API key hay tài khoản Apple trong kho. Không đưa hai mẫu giọng riêng vào Git; chúng chỉ được ghép lúc build qua Actions secret. IPA chứa dữ liệu cần để tạo hai giọng, vì vậy giữ artifact riêng; GitHub secret không bảo vệ được dữ liệu sau khi đóng vào IPA.
-
-Model tải từ các revision Hugging Face trong `Assets/model-manifest.json`; xem model cards/giấy phép tại nguồn trước khi phân phối lại. Mã chuyển từ bản Windows đi kèm GPL-3.0, xem `LICENSE`. ONNX Runtime dùng MIT. `THIRD_PARTY-Windows.md` là hồ sơ của bản gốc, không có nghĩa các thư viện Windows đã được chuyển hết lên iOS.
-
-## Kiểm tra tại Windows
-
-`python -m unittest discover -s Scripts -p 'test_*.py'` kiểm tra tải model không ghi đè file cũ khi tải hỏng. Các XCTest iOS chỉ chạy được trên macOS/GitHub Actions.
+Mã nền chuyển từ bản Windows theo GPL-3.0 (`LICENSE`). ONNX Runtime dùng MIT. Xem model cards/giấy phép ở nguồn Hugging Face trong `Assets/model-manifest.json` trước khi phân phối lại model. `THIRD_PARTY-Windows.md` là hồ sơ gốc, không khẳng định mọi thư viện Windows đã chuyển lên iOS.
