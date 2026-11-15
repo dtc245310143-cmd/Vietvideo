@@ -79,7 +79,7 @@ enum Media {
         guard let video = composition.addMutableTrack(withMediaType: .video, preferredTrackID: kCMPersistentTrackID_Invalid) else { throw AppError.message("Không tạo được luồng xuất video.") }
         try video.insertTimeRange(CMTimeRange(start: .zero, duration: duration), of: sourceVideo, at: .zero)
         for track in try await asset.loadTracks(withMediaType: .audio).prefix(1) {
-            let range = CMTimeRangeGetIntersection(try await track.load(.timeRange), CMTimeRange(start: .zero, duration: duration))
+            let range = CMTimeRangeGetIntersection(try await track.load(.timeRange), otherRange: CMTimeRange(start: .zero, duration: duration))
             if range.duration.seconds > 0 {
                 guard let audio = composition.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid) else { throw AppError.message("Không tạo được luồng tiếng gốc.") }
                 try audio.insertTimeRange(range, of: track, at: range.start)
