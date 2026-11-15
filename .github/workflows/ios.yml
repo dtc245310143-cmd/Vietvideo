@@ -69,7 +69,10 @@ jobs:
       - name: Capture app appearance
         if: steps.voices.outputs.available == 'true'
         run: |
-          DEVICE=$(xcrun simctl list devices available -j | python3 -c 'import sys,json; print(next(d["udid"] for rows in json.load(sys.stdin)["devices"].values() for d in rows if d["name"].startswith("iPhone") and d["state"] == "Booted"))')
+          DEVICE=$(xcrun simctl list devices available -j | python3 -c 'import sys,json; print(next(d["udid"] for rows in json.load(sys.stdin)["devices"].values() for d in rows if d["name"].startswith("iPhone")))')
+          xcrun simctl boot "$DEVICE" || true
+          xcrun simctl bootstatus "$DEVICE" -b
+          xcrun simctl install "$DEVICE" build/simulator/Build/Products/Debug-iphonesimulator/VietVideoVoiceCheck.app
           xcrun simctl terminate "$DEVICE" vn.vietvideo.voicecheck || true
           xcrun simctl launch "$DEVICE" vn.vietvideo.voicecheck
           sleep 3
