@@ -68,7 +68,7 @@ jobs:
         if: always()
         run: |
           if [ -d build/VoiceTests.xcresult ]; then
-            xcrun xcresulttool get test-results summary --path build/VoiceTests.xcresult --format json > build/test-summary.json
+            xcrun xcresulttool get test-results summary --path build/VoiceTests.xcresult > build/test-summary.json
             cat build/test-summary.json
           fi
       - uses: actions/upload-artifact@v4
