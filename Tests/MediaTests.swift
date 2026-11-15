@@ -182,7 +182,13 @@ extension MediaTests {
             context.draw(image,in:CGRect(x:0,y:0,width:CGFloat(w),height:CGFloat(h)))
         }
         XCTAssertGreaterThan(stride(from:0,to:pixels.count,by:4).filter { pixels[$0] > 180 && pixels[$0+1] < 70 && pixels[$0+2] < 70 }.count,100)
-        XCTAssertGreaterThan(stride(from:0,to:pixels.count,by:4).filter { pixels[$0] < 40 && pixels[$0+1] < 40 && pixels[$0+2] < 90 }.count,1000)
+        // Core Image composites in linear light; compare with the unmasked blue.
+        let blue = stride(from: 0, to: pixels.count, by: 4).filter {
+            pixels[$0] < 70 && pixels[$0 + 1] < 70
+        }.map { Double(pixels[$0 + 2]) }
+        let unmasked = try XCTUnwrap(blue.max())
+        XCTAssertGreaterThan(unmasked, 200)
+        XCTAssertGreaterThan(blue.filter { $0 < unmasked * 0.7 }.count, 1000)
     }
 }
 
