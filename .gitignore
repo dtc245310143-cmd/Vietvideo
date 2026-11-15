@@ -1,0 +1,13 @@
+Assets/Models/
+Assets/Calibration/
+.local/
+Pods/
+build/
+build-tmp/
+*.xcworkspace/
+*.xcodeproj/
+__pycache__/
+.DS_Store
+*.ipa
+*.zip
+

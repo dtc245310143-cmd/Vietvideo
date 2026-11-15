@@ -1,0 +1,55 @@
+name: iOS voice compatibility
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: macos-26
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify model download code
+        run: python3 -m unittest discover -s Scripts -p 'test_*.py'
+      - name: Fetch exact desktop voice models
+        run: python3 Scripts/fetch_models.py
+      - name: Restore private voice calibration
+        env:
+          VIETVIDEO_CALIBRATION_B64: ${{ secrets.VIETVIDEO_CALIBRATION_B64 }}
+        run: |
+          python3 -m pip install numpy==2.2.6
+          python3 Scripts/prepare_calibration.py
+      - name: Create Xcode project
+        run: |
+          brew install xcodegen
+          xcodegen generate
+          pod install
+      - name: Build for iPhone
+        run: |
+          set -o pipefail
+          mkdir -p build
+          xcodebuild -workspace VietVideoVoiceCheck.xcworkspace -scheme VietVideoVoiceCheck -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath build CODE_SIGNING_ALLOWED=NO build | tee build/iphone-build.log
+      - name: Package unsigned IPA for iLoader
+        run: |
+          mkdir -p build/Payload
+          cp -R build/Build/Products/Release-iphoneos/VietVideoVoiceCheck.app build/Payload/
+          cd build
+          zip -qr VietVideo-VoiceCheck-unsigned.ipa Payload
+      - name: Test native voice inference on simulator
+        run: |
+          set -o pipefail
+          DEVICE=$(xcrun simctl list devices available -j | python3 -c 'import sys,json; print(next(d["udid"] for rows in json.load(sys.stdin)["devices"].values() for d in rows if d["name"].startswith("iPhone")))')
+          xcodebuild -workspace VietVideoVoiceCheck.xcworkspace -scheme VietVideoVoiceCheck -destination "platform=iOS Simulator,id=$DEVICE" -derivedDataPath build/simulator -resultBundlePath build/VoiceTests.xcresult CODE_SIGNING_ALLOWED=NO test | tee build/simulator-tests.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: VietVideo-VoiceCheck
+          path: |
+            build/*.ipa
+            build/*.log
+          retention-days: 7
