@@ -5,6 +5,9 @@ on:
     branches: [main]
 permissions:
   contents: read
+concurrency:
+  group: ios-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   build:
     runs-on: macos-26
@@ -16,9 +19,22 @@ jobs:
           python-version: '3.12'
       - name: Verify model download code
         run: python3 -m unittest discover -s Scripts -p 'test_*.py'
+      - name: Check private voice setup
+        id: voices
+        env:
+          VOICES: ${{ secrets.VIETVIDEO_CALIBRATION_B64 }}
+        run: |
+          if [ -n "$VOICES" ]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "Voice secret missing: checking compilation only, no IPA will be published." >> "$GITHUB_STEP_SUMMARY"
+          fi
       - name: Fetch exact desktop voice models
+        if: steps.voices.outputs.available == 'true'
         run: python3 Scripts/fetch_models.py
       - name: Restore private voice calibration
+        if: steps.voices.outputs.available == 'true'
         env:
           VIETVIDEO_CALIBRATION_B64: ${{ secrets.VIETVIDEO_CALIBRATION_B64 }}
         run: |
@@ -35,12 +51,14 @@ jobs:
           mkdir -p build
           xcodebuild -workspace VietVideoVoiceCheck.xcworkspace -scheme VietVideoVoiceCheck -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath build CODE_SIGNING_ALLOWED=NO build | tee build/iphone-build.log
       - name: Package unsigned IPA for iLoader
+        if: steps.voices.outputs.available == 'true'
         run: |
           mkdir -p build/Payload
           cp -R build/Build/Products/Release-iphoneos/VietVideoVoiceCheck.app build/Payload/
           cd build
           zip -qr VietVideo-VoiceCheck-unsigned.ipa Payload
       - name: Test native voice inference on simulator
+        if: steps.voices.outputs.available == 'true'
         run: |
           set -o pipefail
           DEVICE=$(xcrun simctl list devices available -j | python3 -c 'import sys,json; print(next(d["udid"] for rows in json.load(sys.stdin)["devices"].values() for d in rows if d["name"].startswith("iPhone")))')
