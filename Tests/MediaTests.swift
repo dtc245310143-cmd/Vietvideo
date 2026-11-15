@@ -65,6 +65,16 @@ final class MediaTests: XCTestCase {
         return sqrt(values.reduce(0.0) { $0 + pow(Double($1) / 32768, 2) } / Double(values.count))
     }
 
+    private func whitePixels(_ image: CGImage) throws -> Int {
+        let width = image.width, height = image.height
+        var rgba = [UInt8](repeating: 0, count: width * height * 4)
+        try rgba.withUnsafeMutableBytes { bytes in
+            let context = try XCTUnwrap(CGContext(data: bytes.baseAddress, width: width, height: height, bitsPerComponent: 8, bytesPerRow: width * 4, space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
+            context.draw(image, in: CGRect(x: 0, y: 0, width: CGFloat(width), height: CGFloat(height)))
+        }
+        return stride(from: 0, to: rgba.count, by: 4).filter { rgba[$0] > 180 && rgba[$0 + 1] > 180 && rgba[$0 + 2] > 180 }.count
+    }
+
     func testLocalExportPreservesOriginalAudioAndAddsVisibleSubtitles() async throws {
         let id = UUID(), folder = ProjectDisk.folder(id)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
@@ -89,13 +99,13 @@ final class MediaTests: XCTestCase {
         let generator = AVAssetImageGenerator(asset: AVURLAsset(url: target))
         generator.requestedTimeToleranceBefore = .zero; generator.requestedTimeToleranceAfter = .zero
         let (image, _) = try await generator.image(at: CMTime(seconds: 1, preferredTimescale: 600))
-        let pixels = try XCTUnwrap(image.dataProvider?.data) as Data
-        let white = pixels.filter { $0 > 230 }.count
+        let white = try whitePixels(image)
         let sourceImage = AVAssetImageGenerator(asset: AVURLAsset(url: url))
         sourceImage.requestedTimeToleranceBefore = .zero; sourceImage.requestedTimeToleranceAfter = .zero
         let (plain, _) = try await sourceImage.image(at: CMTime(seconds: 1, preferredTimescale: 600))
-        let plainPixels = try XCTUnwrap(plain.dataProvider?.data) as Data
-        XCTAssertGreaterThan(white, plainPixels.filter { $0 > 230 }.count + 50)
+        XCTAssertGreaterThan(white, try whitePixels(plain) + 20)
+        let (outsideCue, _) = try await generator.image(at: CMTime(seconds: 0.1, preferredTimescale: 600))
+        XCTAssertLessThan(try whitePixels(outsideCue), 20)
         let failed = Task { () throws -> URL in try Task.checkCancellation(); return try await Media.export(project, cues: [cue], style: CaptionStyle()) }
         failed.cancel()
         do { _ = try await failed.value; XCTFail("Cancelled export should not finish") } catch is CancellationError {} catch { XCTFail("Unexpected cancellation error: \(error)") }
