@@ -40,5 +40,17 @@
     "sha256": "e69d52e0f4e84ca27850557ee54face46632d3a5a16c89bd246c7c408466dcad",
     "bytes": 44198912,
     "url": "https://huggingface.co/OpenMOSS-Team/MOSS-Audio-Tokenizer-Nano-ONNX/resolve/ceff0d0749bfb3fa2d61149794ec6feef0d1e1ae/moss_audio_tokenizer_decode_shared.data"
+  },
+  {
+    "name": "tokenizer.json",
+    "url": "https://huggingface.co/pnnbao-ump/VieNeu-TTS-v3-Turbo/resolve/61b85e3d937fbbacb387714180e8182823512523/onnx_update/tokenizer.json",
+    "bytes": 22320,
+    "sha256": "6cc6bcbe380b8c37bd9f2514e37c5dfa3e00e122c6e3125dae5c4afe48e39158"
+  },
+  {
+    "name": "sea_g2p.bin",
+    "url": "https://github.com/pnnbao97/sea-g2p/releases/download/v0.10.0/sea_g2p.bin",
+    "bytes": 62829820,
+    "sha256": "4346e690d0711ebc5231e7a42c5c88aaf6e40377e894b4617c018fd81c6f4096"
   }
 ]

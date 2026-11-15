@@ -17,8 +17,12 @@ targets:
       - path: Assets
         type: folder
         buildPhase: resources
+    dependencies:
+      - framework: Vendor/SeaG2P.xcframework
+        embed: false
     settings:
       base:
+        SWIFT_OBJC_BRIDGING_HEADER: $(SRCROOT)/Sources/SeaBridge.h
         PRODUCT_BUNDLE_IDENTIFIER: vn.vietvideo.voicecheck
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_CFBundleDisplayName: VietVideo iOS

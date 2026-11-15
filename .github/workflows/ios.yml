@@ -40,6 +40,8 @@ jobs:
         run: |
           python3 -m pip install numpy==2.2.6
           python3 Scripts/prepare_calibration.py
+      - name: Build native Vietnamese phonemizer
+        run: python3 Scripts/build_phonemizer.py
       - name: Create Xcode project
         run: |
           brew install xcodegen

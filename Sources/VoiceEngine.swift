@@ -19,7 +19,7 @@ enum VoiceError: LocalizedError {
     }
 }
 
-// A calibration-only port: phonemes/tokens are exported from the desktop front end.
+// The same ONNX graphs and reference voices as the approved desktop version.
 final class VoiceEngine {
     let calibration: Calibration
     private let environment: ORTEnv
@@ -184,13 +184,13 @@ final class VoiceEngine {
         return (codes, ended)
     }
 
-    func synthesize(voice: Int, maxFrames: Int = 180, cancelled: () -> Bool, progress: (Int) -> Void) throws -> [Float] {
+    func synthesize(voice: Int, tokens inputTokens: [Int64]? = nil, maxFrames: Int = 180, requireEnd: Bool = false, cancelled: () -> Bool, progress: (Int) -> Void) throws -> [Float] {
         let c = calibration
         guard c.voices.indices.contains(voice), maxFrames > 0, maxFrames <= 300 else {
             throw VoiceError.invalid("Chọn giọng hoặc độ dài không hợp lệ.")
         }
         let selected = c.voices[voice]
-        let tokens = [c.styleToken, c.promptStart] + c.tokens + [c.promptEnd]
+        let tokens = [c.styleToken, c.promptStart] + (inputTokens ?? c.tokens) + [c.promptEnd]
         var embeddings: [Float] = []
         for token in tokens { embeddings += try embed(token, nil, selected.anchor) }
         for codes in selected.referenceCodes { embeddings += try embed(c.referenceToken, codes, selected.anchor) }
@@ -199,6 +199,7 @@ final class VoiceEngine {
         var hidden = Array(try floats(outputs[0]).suffix(c.hidden))
         var history = [[Int64]](repeating: [], count: c.channels)
         var frames: [Int32] = []
+        var completed = false
         for frame in 0..<maxFrames {
             let ended = try autoreleasepool { () throws -> Bool in
                 if cancelled() { throw CancellationError() }
@@ -214,9 +215,10 @@ final class VoiceEngine {
                 guard hidden.count == c.hidden else { throw VoiceError.invalid("Đầu ra giải mã không khớp.") }
                 return false
             }
-            if ended { break }
+            if ended { completed = true; break }
         }
         if cancelled() { throw CancellationError() }
+        if requireEnd && !completed { throw VoiceError.invalid("Giọng chưa kết thúc câu tự nhiên. Hãy thử lại; tool không cắt mất phần lời còn lại.") }
         let count = frames.count / c.channels
         let decoded = try run(codec, ["audio_codes": try tensor(frames, [1, count, c.channels], .int32),
                                       "audio_code_lengths": try tensor([Int32(count)], [1], .int32)])
