@@ -95,27 +95,42 @@ struct DialogueEditor: View {
 
 struct LibraryView: View {
     @EnvironmentObject var store: ProjectStore
+    @State private var deleting: VideoProject?
     let openStudio: () -> Void
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
                     Text("Dự án của bạn").font(.largeTitle.bold())
-                    Text("Mở lại để tiếp tục dịch hoặc xuất phiên bản mới.").foregroundStyle(Palette.muted)
+                    Text("Mở lại để tiếp tục dịch, hoặc xoá dự án để giải phóng dung lượng.").foregroundStyle(Palette.muted)
                     if store.projects.isEmpty { ContentUnavailableView("Chưa có dự án", systemImage: "film.stack", description: Text("Chọn video hoặc tìm video ở mục Khám phá.")) }
                     LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 14) {
                         ForEach(store.projects) { project in
-                            Button { store.open(project); openStudio() } label: {
-                                VStack(alignment: .leading, spacing: 10) {
-                                    MovieThumbnail(project: project).frame(height: 110).clipShape(RoundedRectangle(cornerRadius: 14))
-                                    Text(project.title).font(.subheadline.bold()).lineLimit(2).frame(height: 42, alignment: .top)
-                                    HStack { Text("\(Int(project.duration)) giây"); Spacer(); Image(systemName: project.outputName == nil ? "doc.text" : "checkmark.circle.fill").foregroundStyle(Palette.cyan) }.font(.caption).foregroundStyle(Palette.muted)
-                                }.padding(12).background(Palette.panel, in: RoundedRectangle(cornerRadius: 20))
-                            }.buttonStyle(.plain).disabled(store.busy)
+                            VStack(alignment: .leading, spacing: 10) {
+                                Button { store.open(project); openStudio() } label: {
+                                    VStack(alignment: .leading, spacing: 10) {
+                                        MovieThumbnail(project: project).frame(height: 110).clipShape(RoundedRectangle(cornerRadius: 14))
+                                        Text(project.title).font(.subheadline.bold()).lineLimit(2).frame(height: 42, alignment: .top)
+                                        HStack { Text("\(Int(project.duration)) giây"); Spacer(); Image(systemName: project.outputName == nil ? "doc.text" : "checkmark.circle.fill").foregroundStyle(Palette.cyan) }.font(.caption).foregroundStyle(Palette.muted)
+                                    }
+                                }.buttonStyle(.plain)
+                                Button(role: .destructive) { deleting = project } label: {
+                                    Label("Xoá dự án", systemImage: "trash").font(.caption.weight(.semibold))
+                                        .foregroundStyle(.red).frame(maxWidth: .infinity).padding(.vertical, 10)
+                                        .background(.red.opacity(0.1), in: RoundedRectangle(cornerRadius: 12))
+                                }.buttonStyle(.plain).accessibilityLabel("Xoá dự án \(project.title)")
+                            }.padding(12).background(Palette.panel, in: RoundedRectangle(cornerRadius: 20)).disabled(store.busy)
                         }
                     }
+                    Text(store.status).font(.footnote).foregroundStyle(Palette.muted)
                 }.padding(20)
             }.background(Palette.background).navigationBarTitleDisplayMode(.inline)
+                .alert("Xoá dự án?", isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } }), presenting: deleting) { project in
+                    Button("Xoá dự án", role: .destructive) { store.delete(project); deleting = nil }
+                    Button("Huỷ", role: .cancel) { deleting = nil }
+                } message: { project in
+                    Text("Xoá “\(project.title)” cùng video, phụ đề và các tệp của dự án. Không thể hoàn tác. Video đã lưu ra Ảnh hoặc thư mục khác vẫn được giữ.")
+                }
         }
     }
 }

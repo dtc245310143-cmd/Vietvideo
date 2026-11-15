@@ -1,4 +1,4 @@
-# VietVideo iOS 1.0.1
+# VietVideo iOS 1.0.2
 
 Ứng dụng iPhone độc lập, giao diện Studio, Khám phá, Dự án và Cài đặt; biểu tượng ứng dụng riêng. Giữ bundle ID của bản thử để cập nhật bằng iLoader.
 
@@ -7,13 +7,14 @@
 - Xuất chỉ vietsub hoặc lồng tiếng bằng một trong hai giọng đã duyệt, tạo giọng trực tiếp trên iPhone. Có thể tắt phụ đề khi lồng tiếng. Cache câu đã tạo giúp tiếp tục công việc.
 - Tiếng gốc mặc định 25% khi lồng tiếng, chọn 0/15/25/35/50/75/100; giữ mức cố định cả video. Câu dài được căn thời gian bằng cách kéo giãn đoạn hình/tiếng gốc, không bỏ bớt lời.
 - Chọn vùng làm mờ/che chữ gốc trên khung xem trước, chỉnh kiểu/cỡ/vị trí phụ đề, thêm logo ở bốn góc.
+- Xoá từng dự án ở mục Dự án, có xác nhận; dọn video, phụ đề và cache giọng của dự án. Không xoá các bản đã lưu ra Ảnh/thư mục khác.
 - Lưu dự án và chia sẻ MP4/SRT ra Tệp/Ảnh. Dữ liệu ở Tệp → Trên iPhone → VietVideo → VietVideo.
 
 Giữ app mở trong lúc xử lý; iOS có thể dừng công việc khi app về nền. Gemini cần mạng và hạn mức của key; key lưu ở Keychain, không đưa vào dự án/GitHub. Link nguồn có thể bị giới hạn bởi đăng nhập, xác minh, khu vực hoặc thay đổi của nền tảng. Không dùng máy chủ trung gian để tạo giọng hay tải video. Bộ lọc tiếng rè nhẹ không thể khôi phục mọi bản thu hỏng.
 
 ## Build và cài
 
-Workflow **VietVideo iOS** dùng Actions secret `VIETVIDEO_CALIBRATION_B64` đã thiết lập. Sau khi build và kiểm tra thành công, tải artifact **VietVideo-iOS-1.0.1**, giải nén IPA và dùng iLoader ký/cài. Thiếu secret chỉ kiểm tra biên dịch, không phát hành IPA thiếu giọng.
+Workflow **VietVideo iOS** dùng Actions secret `VIETVIDEO_CALIBRATION_B64` đã thiết lập. Sau khi build và kiểm tra thành công, tải artifact **VietVideo-iOS-1.0.2**, giải nén IPA và dùng iLoader ký/cài. Thiếu secret chỉ kiểm tra biên dịch, không phát hành IPA thiếu giọng.
 
 Model cố định revision và SHA-256; không đưa `.local`, `Assets/Calibration`, `Assets/Models` lên GitHub. IPA chứa dữ liệu tạo giọng, chỉ phân phối trong phạm vi được phép.
 

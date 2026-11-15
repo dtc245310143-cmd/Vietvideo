@@ -28,6 +28,18 @@ final class ProjectStore: ObservableObject {
         output = project.outputName.map { ProjectDisk.folder(project.id).appendingPathComponent($0) }
         status = "Đã mở \(project.title)."
     }
+    func delete(_ project: VideoProject) {
+        guard !busy, projects.contains(where: { $0.id == project.id }) else { return }
+        if current?.id == project.id { autosave?.cancel(); autosave = nil }
+        do {
+            try ProjectDisk.remove(project.id)
+            if current?.id == project.id {
+                current = nil; draft = ""; output = nil; settings = ExportSettings()
+            }
+            projects.removeAll { $0.id == project.id }
+            status = "Đã xoá dự án \(project.title) và các tệp của dự án trên iPhone."
+        } catch { status = "Chưa xoá được dự án: \(error.localizedDescription)" }
+    }
     private func update(_ project: VideoProject) throws {
         try ProjectDisk.save(project)
         current = project

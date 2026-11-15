@@ -114,6 +114,12 @@ enum ProjectDisk {
         FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("VietVideo", isDirectory: true)
     }
     static func folder(_ id: UUID) -> URL { root.appendingPathComponent(id.uuidString, isDirectory: true) }
+    static func remove(_ id: UUID) throws {
+        let directory = folder(id)
+        if FileManager.default.fileExists(atPath: directory.path) {
+            try FileManager.default.removeItem(at: directory)
+        }
+    }
     static func save(_ project: VideoProject) throws {
         let folder = folder(project.id)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)

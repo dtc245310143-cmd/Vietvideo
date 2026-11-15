@@ -155,6 +155,7 @@ struct StudioView: View {
                 .task(id: store.current?.id) {
                     player?.pause()
                     if let project = store.current { player = AVPlayer(url: ProjectDisk.folder(project.id).appendingPathComponent(project.movieName)) }
+                    else { player = nil }
                 }
                 .sheet(isPresented: $maskSheet) { MaskEditor() }
                 .sheet(isPresented: $dialogueSheet) { DialogueEditor() }
