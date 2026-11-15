@@ -64,6 +64,13 @@ jobs:
           set -o pipefail
           DEVICE=$(xcrun simctl list devices available -j | python3 -c 'import sys,json; print(next(d["udid"] for rows in json.load(sys.stdin)["devices"].values() for d in rows if d["name"].startswith("iPhone")))')
           xcodebuild -workspace VietVideoVoiceCheck.xcworkspace -scheme VietVideoVoiceCheck -destination "platform=iOS Simulator,id=$DEVICE" -derivedDataPath build/simulator -parallel-testing-enabled NO -resultBundlePath build/VoiceTests.xcresult CODE_SIGNING_ALLOWED=NO test | tee build/simulator-tests.log
+      - name: Summarize native test diagnostics
+        if: always()
+        run: |
+          if [ -d build/VoiceTests.xcresult ]; then
+            xcrun xcresulttool get test-results summary --path build/VoiceTests.xcresult --format json > build/test-summary.json
+            cat build/test-summary.json
+          fi
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -71,4 +78,5 @@ jobs:
           path: |
             build/*.ipa
             build/*.log
+            build/test-summary.json
           retention-days: 7

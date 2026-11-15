@@ -15,7 +15,10 @@ final class MediaTests: XCTestCase {
         XCTAssertTrue(writer.startWriting())
         writer.startSession(atSourceTime: .zero)
         for frame in 0..<48 {
-            while !input.isReadyForMoreMediaData { try await Task.sleep(nanoseconds: 1_000_000) }
+            while !input.isReadyForMoreMediaData {
+                guard writer.status == .writing else { throw writer.error ?? AppError.message("Fixture encoder stopped") }
+                try await Task.sleep(nanoseconds: 1_000_000)
+            }
             var pixel: CVPixelBuffer?
             XCTAssertEqual(CVPixelBufferPoolCreatePixelBuffer(nil, try XCTUnwrap(adaptor.pixelBufferPool), &pixel), kCVReturnSuccess)
             let buffer = try XCTUnwrap(pixel)
@@ -28,12 +31,14 @@ final class MediaTests: XCTestCase {
         input.markAsFinished()
         await writer.finishWriting()
         XCTAssertEqual(writer.status, .completed)
+        print("MEDIA FIXTURE: video written")
         let wave = folder.appendingPathComponent("tone.wav")
         let format = try XCTUnwrap(AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: 16000, channels: 1, interleaved: false))
         let samples = try XCTUnwrap(AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 32000))
         samples.frameLength = 32000
         for i in 0..<32000 { samples.floatChannelData![0][i] = Float(sin(Double(i) * 2 * .pi * 440 / 16000) * 0.25) }
         do { let file = try AVAudioFile(forWriting: wave, settings: format.settings); try file.write(from: samples) }
+        print("MEDIA FIXTURE: audio written")
         let videoAsset = AVURLAsset(url: silent), audioAsset = AVURLAsset(url: wave)
         let videoTracks = try await videoAsset.loadTracks(withMediaType: .video)
         let audioTracks = try await audioAsset.loadTracks(withMediaType: .audio)
@@ -48,7 +53,9 @@ final class MediaTests: XCTestCase {
         let session = try XCTUnwrap(AVAssetExportSession(asset: composition, presetName: AVAssetExportPresetPassthrough))
         let result = folder.appendingPathComponent("source.mov")
         session.outputURL = result; session.outputFileType = .mov
+        print("MEDIA FIXTURE: combining")
         await session.export()
+        print("MEDIA FIXTURE: combined")
         XCTAssertEqual(session.status, .completed, "\(String(describing: session.error))")
         return result
     }
@@ -75,7 +82,9 @@ final class MediaTests: XCTestCase {
         let before = try await Media.audio(url, start: 0.1, length: 1)
         let after = try await Media.audio(target, start: 0.1, length: 1)
         XCTAssertEqual(before.count, 32044); XCTAssertEqual(after.count, 32044)
-        XCTAssertGreaterThan(amplitude(before), 0.1)
+        XCTAssertEqual(amplitude(before), 0.17677, accuracy: 0.005)
+        let later = try await Media.audio(url, start: 1.1, length: 0.5)
+        XCTAssertEqual(amplitude(later), 0.17677, accuracy: 0.005)
         XCTAssertEqual(amplitude(after) / amplitude(before), 1, accuracy: 0.1)
         let generator = AVAssetImageGenerator(asset: AVURLAsset(url: target))
         generator.requestedTimeToleranceBefore = .zero; generator.requestedTimeToleranceAfter = .zero

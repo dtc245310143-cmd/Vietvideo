@@ -1,6 +1,7 @@
 import Foundation
 import AVFoundation
-import UIKit
+import CoreImage
+import CoreText
 import CryptoKit
 
 struct CaptionStyle {
@@ -90,18 +91,18 @@ enum Media {
         let bounds = CGRect(origin: .zero, size: naturalSize).applying(transform)
         let size = CGSize(width: abs(bounds.width), height: abs(bounds.height))
         guard size.width > 0, size.height > 0 else { throw AppError.message("Kích thước video không hợp lệ.") }
-        let instruction = AVMutableVideoCompositionInstruction()
-        instruction.timeRange = CMTimeRange(start: .zero, duration: duration)
-        let layerInstruction = AVMutableVideoCompositionLayerInstruction(assetTrack: video)
-        layerInstruction.setTransform(transform.concatenating(CGAffineTransform(translationX: -bounds.minX, y: -bounds.minY)), at: .zero)
-        instruction.layerInstructions = [layerInstruction]
-        let videoComposition = AVMutableVideoComposition()
+        video.preferredTransform = transform
+        let captions = CaptionRenderer(cues: cues, style: style)
+        let base = AVVideoComposition(asset: composition, applyingCIFiltersWithHandler: { request in
+            do {
+                let image = try captions.apply(to: request.sourceImage, at: request.compositionTime.seconds)
+                request.finish(with: image, context: nil)
+            } catch { request.finish(with: error) }
+        })
+        let videoComposition = base.mutableCopy() as! AVMutableVideoComposition
         videoComposition.renderSize = size
         let rate = try await sourceVideo.load(.nominalFrameRate)
         videoComposition.frameDuration = CMTime(value: 1, timescale: CMTimeScale(max(1, min(60, rate.rounded()))))
-        videoComposition.instructions = [instruction]
-        let overlay = await MainActor.run { captionLayers(size: size, cues: cues, style: style) }
-        videoComposition.animationTool = AVVideoCompositionCoreAnimationTool(postProcessingAsVideoLayer: overlay.video, in: overlay.parent)
         guard let export = AVAssetExportSession(asset: composition, presetName: AVAssetExportPresetHighestQuality) else { throw AppError.message("iPhone không hỗ trợ xuất video này.") }
         guard export.supportedFileTypes.contains(.mp4) else { throw AppError.message("Định dạng nguồn chưa hỗ trợ xuất MP4 trên iPhone.") }
         let partial = folder.appendingPathComponent("export-\(UUID().uuidString).part.mp4")
@@ -128,28 +129,57 @@ enum Media {
         } catch { try? FileManager.default.removeItem(at: partial); throw error }
     }
 
-    @MainActor
-    private static func captionLayers(size: CGSize, cues: [Subtitle], style: CaptionStyle) -> (parent: CALayer, video: CALayer) {
-        let parent = CALayer(), video = CALayer()
-        parent.frame = CGRect(origin: .zero, size: size); video.frame = parent.bounds
-        parent.addSublayer(video)
-        let fontSize = max(14, size.width / 1080 * style.size)
-        for cue in cues {
-            let text = CATextLayer()
-            text.string = NSAttributedString(string: cue.text, attributes: [.font: UIFont.systemFont(ofSize: fontSize, weight: .semibold),
-                .foregroundColor: style.yellow ? UIColor.yellow : UIColor.white,
-                .paragraphStyle: { let p = NSMutableParagraphStyle(); p.alignment = .center; return p }()])
-            let height = min(size.height * 0.3, max(fontSize * 3.5, 50))
-            text.frame = CGRect(x: size.width * 0.05, y: style.top ? size.height * 0.9 - height : size.height * 0.07, width: size.width * 0.9, height: height)
-            text.isWrapped = true; text.alignmentMode = .center; text.contentsScale = 2
-            text.shadowColor = UIColor.black.cgColor; text.shadowOpacity = 1; text.shadowRadius = 3; text.shadowOffset = CGSize(width: 1, height: -1)
-            text.opacity = 0
-            let animation = CABasicAnimation(keyPath: "opacity")
-            animation.fromValue = 1; animation.toValue = 1; animation.beginTime = AVCoreAnimationBeginTimeAtZero + cue.start
-            animation.duration = cue.end - cue.start; animation.isRemovedOnCompletion = true
-            text.add(animation, forKey: "subtitle")
-            parent.addSublayer(text)
+}
+
+private final class CaptionRenderer {
+    private let cues: [Subtitle]
+    private let style: CaptionStyle
+    private let cache = NSCache<NSString, CIImage>()
+    init(cues: [Subtitle], style: CaptionStyle) {
+        self.cues = cues; self.style = style
+        cache.totalCostLimit = 16 * 1024 * 1024
+    }
+    func apply(to source: CIImage, at seconds: Double) throws -> CIImage {
+        var low = 0, high = cues.count
+        while low < high {
+            let middle = (low + high) / 2
+            if cues[middle].start <= seconds { low = middle + 1 } else { high = middle }
         }
-        return (parent, video)
+        guard low > 0, seconds < cues[low - 1].end else { return source }
+        let text = cues[low - 1].text
+        let extent = source.extent
+        let key = "\(extent.width)|\(extent.height)|\(text)" as NSString
+        let image: CIImage
+        if let cached = cache.object(forKey: key) { image = cached }
+        else {
+            image = try bitmap(text, width: extent.width, height: extent.height)
+            cache.setObject(image, forKey: key, cost: Int(image.extent.width * image.extent.height * 4))
+        }
+        let y = style.top ? extent.maxY - extent.height * 0.07 - image.extent.height : extent.minY + extent.height * 0.07
+        let x = extent.minX + (extent.width - image.extent.width) / 2
+        return image.transformed(by: CGAffineTransform(translationX: x, y: y)).composited(over: source).cropped(to: extent)
+    }
+    private func bitmap(_ text: String, width: CGFloat, height: CGFloat) throws -> CIImage {
+        let font = CTFontCreateWithName("HelveticaNeue-Bold" as CFString, max(14, width / 1080 * style.size), nil)
+        var alignment = CTTextAlignment.center
+        let paragraph = withUnsafePointer(to: &alignment) { pointer in
+            let setting = CTParagraphStyleSetting(spec: .alignment, valueSize: MemoryLayout<CTTextAlignment>.size, value: pointer)
+            return CTParagraphStyleCreate([setting], 1)
+        }
+        let color = CGColor(colorSpace: CGColorSpaceCreateDeviceRGB(), components: style.yellow ? [1, 1, 0, 1] : [1, 1, 1, 1])!
+        let attributes: [NSAttributedString.Key: Any] = [NSAttributedString.Key(kCTFontAttributeName as String): font,
+            NSAttributedString.Key(kCTForegroundColorAttributeName as String): color,
+            NSAttributedString.Key(kCTParagraphStyleAttributeName as String): paragraph]
+        let string = NSAttributedString(string: text, attributes: attributes)
+        let setter = CTFramesetterCreateWithAttributedString(string as CFAttributedString)
+        let w = Int((width * 0.9).rounded(.down))
+        let suggested = CTFramesetterSuggestFrameSizeWithConstraints(setter, CFRange(location: 0, length: string.length), nil, CGSize(width: CGFloat(max(1, w - 12)), height: 10000), nil)
+        let h = Int(min(height * 0.4, ceil(suggested.height) + 12))
+        guard w > 0, h > 0, let context = CGContext(data: nil, width: w, height: h, bitsPerComponent: 8, bytesPerRow: w * 4, space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { throw AppError.message("Không đủ bộ nhớ để vẽ phụ đề.") }
+        context.setShadow(offset: CGSize(width: 1, height: -1), blur: 2, color: CGColor(gray: 0, alpha: 1))
+        let path = CGPath(rect: CGRect(x: 6, y: 6, width: CGFloat(w - 12), height: CGFloat(h - 12)), transform: nil)
+        CTFrameDraw(CTFramesetterCreateFrame(setter, CFRange(location: 0, length: string.length), path, nil), context)
+        guard let cg = context.makeImage() else { throw AppError.message("Chưa vẽ được chữ phụ đề.") }
+        return CIImage(cgImage: cg)
     }
 }
