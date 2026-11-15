@@ -54,7 +54,7 @@ final class VoiceCheck: ObservableObject {
         busy = false
         UIApplication.shared.isIdleTimerDisabled = false
         output = url
-        status = String(format: "Đã tạo %.1f giây âm thanh trong %.1f giây. Nghe và kiểm tra giọng trước khi chuyển tiếp phần video.", seconds, elapsed)
+        status = String(format: "Đã tạo %.1f giây âm thanh trong %.1f giây. Nghe mẫu giọng dùng để lồng tiếng cho video.", seconds, elapsed)
         play()
     }
 
@@ -87,7 +87,7 @@ struct VoiceCheckView: View {
                     VStack(alignment: .leading, spacing: 24) {
                         Text("VietVideo trên iPhone").font(.largeTitle.bold())
                         Text("Kiểm tra bộ giọng 4.4.4").font(.title2).foregroundStyle(.secondary)
-                        Text("Hai giọng chạy trực tiếp trên máy. Mục này vẫn chỉ đọc câu mẫu; lồng tiếng cho văn bản bất kỳ đang được chuyển tiếp.")
+                        Text("Hai giọng chạy trực tiếp trên iPhone. Nghe câu mẫu rồi chọn giọng phù hợp trong mục lồng tiếng.")
                         Text("Câu mẫu: Xin chào, đây là giọng thuyết minh Việt Video.")
                             .padding().frame(maxWidth: .infinity, alignment: .leading)
                             .background(.blue.opacity(0.08), in: RoundedRectangle(cornerRadius: 18))
@@ -108,4 +108,5 @@ struct VoiceCheckView: View {
             }
     }
 }
+
 

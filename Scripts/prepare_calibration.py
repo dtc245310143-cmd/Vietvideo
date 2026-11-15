@@ -21,3 +21,4 @@ with np.load(root / 'Assets/Models/vieneu_v3_heads.npz', allow_pickle=False) as 
     weights['audio_emb'].astype('<f4').tofile(target / 'audio.f32')
 (root / 'Assets/Models/vieneu_v3_heads.npz').unlink()
 
+

@@ -1,6 +1,8 @@
 import Foundation
 import Combine
 import UIKit
+import ImageIO
+import AVFoundation
 
 @MainActor
 final class ProjectStore: ObservableObject {
@@ -10,6 +12,7 @@ final class ProjectStore: ObservableObject {
     @Published var status = "Chọn video trên iPhone để bắt đầu."
     @Published var busy = false
     @Published var output: URL?
+    @Published var settings = ExportSettings()
     private var task: Task<Void, Never>?
     private var autosave: Task<Void, Never>?
 
@@ -21,6 +24,7 @@ final class ProjectStore: ObservableObject {
         guard !busy else { return }
         saveDraft()
         current = project; draft = project.draft
+        settings = project.settings ?? ExportSettings()
         output = project.outputName.map { ProjectDisk.folder(project.id).appendingPathComponent($0) }
         status = "Đã mở \(project.title)."
     }
@@ -35,8 +39,10 @@ final class ProjectStore: ObservableObject {
         autosave = Task { try? await Task.sleep(nanoseconds: 500_000_000); if !Task.isCancelled { saveDraft() } }
     }
     func saveDraft() {
-        guard var project = current, project.draft != draft else { return }
+        guard var project = current else { return }
+        if project.draft == draft && project.settings == settings { return }
         project.draft = draft
+        project.settings = settings
         do { try update(project) } catch { status = "Chưa lưu được bản nháp: \(error.localizedDescription)" }
     }
     func stop() { task?.cancel() }
@@ -62,7 +68,8 @@ final class ProjectStore: ObservableObject {
             status = "Đang chép video vào dự án trên iPhone…"
             let duration = try await Media.duration(source)
             let name = "source." + (source.pathExtension.isEmpty ? "mp4" : source.pathExtension)
-            let project = VideoProject(title: source.deletingPathExtension().lastPathComponent, duration: duration, movieName: name)
+            let title = temporary ? "Video " + Date().formatted(date: .abbreviated, time: .shortened) : source.deletingPathExtension().lastPathComponent
+            let project = VideoProject(title: title, duration: duration, movieName: name)
             let folder = ProjectDisk.folder(project.id)
             try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
             let target = folder.appendingPathComponent(name)
@@ -71,7 +78,7 @@ final class ProjectStore: ObservableObject {
                 else { try FileManager.default.copyItem(at: source, to: target) }
             }.value
             try Task.checkCancellation()
-            try update(project); draft = ""; output = nil
+            try update(project); draft = ""; output = nil; settings = ExportSettings()
             status = "Đã nhập video \(Int(duration)) giây. Có thể dịch hoặc nhập phụ đề SRT có sẵn."
         }
     }
@@ -81,6 +88,33 @@ final class ProjectStore: ObservableObject {
             let client = try Gemini(key: key, model: model, language: language)
             try await client.check(log: log)
             status = "Key truy cập được model này. Chưa gọi dịch hay xác nhận hạn mức còn lại."
+        }
+    }
+
+    func download(_ input: String, directMedia: URL? = nil, title: String? = nil) {
+        saveDraft()
+        run { [self] in
+            let (platform, _) = try VideoPlatform.identify(input)
+            let scratch = FileManager.default.temporaryDirectory.appendingPathComponent("source-\(UUID().uuidString)", isDirectory: true)
+            try FileManager.default.createDirectory(at: scratch, withIntermediateDirectories: true)
+            defer { try? FileManager.default.removeItem(at: scratch) }
+            let file: URL, name: String
+            if let directMedia {
+                status = "Đang tải video đang phát trong trình duyệt…"
+                file = try await VideoSources.downloadFile(directMedia, platform: platform, into: scratch)
+                name = title ?? platform.rawValue
+                let tracks = try await AVURLAsset(url: file).loadTracks(withMediaType: .audio)
+                guard !tracks.isEmpty else { throw AppError.message("Luồng đang phát chỉ có hình. Dùng tải từ link trang để ghép cả tiếng.") }
+            } else { (file, name) = try await VideoSources.download(input, into: scratch, log: log) }
+            try Task.checkCancellation()
+            let duration = try await Media.duration(file)
+            var project = VideoProject(title: name, duration: duration, movieName: "source.mp4")
+            project.sourceURL = input
+            let folder = ProjectDisk.folder(project.id)
+            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+            try FileManager.default.moveItem(at: file, to: folder.appendingPathComponent(project.movieName))
+            try update(project); draft = ""; output = nil; settings = ExportSettings()
+            status = "Đã tải \(name) · \(Int(duration)) giây. Có thể tạo lời Việt."
         }
     }
 
@@ -166,17 +200,52 @@ final class ProjectStore: ObservableObject {
         }
     }
 
-    func export(style: CaptionStyle) {
+    func export(style: CaptionStyle? = nil) {
         saveDraft()
         guard let initial = current else { return }
         run { [self] in
             let cues = try SRT.parse(draft, duration: initial.duration)
-            status = "Đang chèn phụ đề và xuất MP4, giữ âm lượng tiếng gốc. Giữ ứng dụng mở…"
-            let url = try await Media.export(initial, cues: cues, style: style)
-            var project = initial; project.outputName = url.lastPathComponent
+            let chosen = settings
+            try chosen.validate()
+            let timeline: DubTimeline?
+            if chosen.dub {
+                let work = Task.detached {
+                    try Dubbing.prepare(project: initial, cues: cues, voice: chosen.voice, reduceHiss: chosen.reduceHiss, log: self.log)
+                }
+                timeline = try await withTaskCancellationHandler(operation: { try await work.value }, onCancel: { work.cancel() })
+            } else { timeline = nil }
+            try Task.checkCancellation()
+            var render = style ?? CaptionStyle(size: chosen.size, top: chosen.top, yellow: chosen.yellow)
+            render.burnSubtitles = !chosen.dub || chosen.burnSubtitles
+            render.mask = chosen.mask; render.solidMask = chosen.solidMask; render.blurStrength = chosen.blurStrength
+            render.logo = chosen.logoName.map { ProjectDisk.folder(initial.id).appendingPathComponent($0) }
+            render.logoCorner = chosen.logoCorner; render.logoWidth = chosen.logoWidth
+            status = chosen.dub ? "Đang xuất lồng tiếng, tiếng gốc cố định \(chosen.originalVolume)% và tùy chọn phụ đề…" : "Đang xuất Việt sub, giữ tiếng gốc…"
+            let url = try await Media.export(initial, cues: cues, style: render, timeline: timeline, originalVolume: chosen.dub ? chosen.originalVolume : 100)
+            if let timeline { try Data(SRT.encode(timeline.plans.map(\.cue)).utf8).write(to: ProjectDisk.folder(initial.id).appendingPathComponent("vi-dub.srt"), options: .atomic) }
+            var project = initial; project.outputName = url.lastPathComponent; project.settings = chosen
             try update(project); output = url
             status = "Đã xuất video. Bấm Chia sẻ video để lưu ra Tệp hoặc Ảnh."
         }
+    }
+
+    func addLogo(_ data: Data) {
+        guard let project = current, !busy else { return }
+        do {
+            guard let source = CGImageSourceCreateWithData(data as CFData, nil), let image = CGImageSourceCreateThumbnailAtIndex(source, 0, [kCGImageSourceCreateThumbnailFromImageAlways: true, kCGImageSourceThumbnailMaxPixelSize: 1024, kCGImageSourceCreateThumbnailWithTransform: true] as CFDictionary) else { throw AppError.message("Ảnh logo không hợp lệ.") }
+            guard let png = UIImage(cgImage: image).pngData() else { throw AppError.message("Không lưu được logo.") }
+            try png.write(to: ProjectDisk.folder(project.id).appendingPathComponent("channel-logo.png"), options: .atomic)
+            settings.logoName = "channel-logo.png"; saveDraft(); status = "Đã thêm logo kênh."
+        } catch { status = error.localizedDescription }
+    }
+
+    func applyEdits(_ cues: [Subtitle]) {
+        guard var project = current, !busy else { return }
+        do {
+            try SRT.validate(cues, duration: project.duration)
+            project.cues = cues; project.draft = SRT.encode(cues); project.settings = settings
+            try update(project); draft = project.draft; status = "Đã lưu \(cues.count) câu phụ đề."
+        } catch { status = error.localizedDescription }
     }
 
     func shareSRT() -> URL? {
@@ -187,3 +256,4 @@ final class ProjectStore: ObservableObject {
         catch { status = "Chưa ghi được tệp phụ đề: \(error.localizedDescription)"; return nil }
     }
 }
+

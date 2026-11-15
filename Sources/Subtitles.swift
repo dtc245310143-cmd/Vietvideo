@@ -74,6 +74,39 @@ struct VideoProject: Codable, Identifiable {
     var cues: [Subtitle] = []
     var draft = ""
     var outputName: String?
+    var settings: ExportSettings?
+    var sourceURL: String?
+}
+
+struct MaskRegion: Codable, Equatable {
+    var x: Double
+    var y: Double
+    var width: Double
+    var height: Double
+    var valid: Bool { [x, y, width, height].allSatisfy(\.isFinite) && x >= 0 && y >= 0 && width > 0 && height > 0 && x + width <= 1.00001 && y + height <= 1.00001 }
+}
+struct ExportSettings: Codable, Equatable {
+    var dub = false
+    var burnSubtitles = true
+    var voice = 0
+    var originalVolume = 25
+    var reduceHiss = true
+    var size = 30.0
+    var top = false
+    var yellow = false
+    var mask: MaskRegion?
+    var solidMask = false
+    var blurStrength = 20.0
+    var logoName: String?
+    var logoCorner = "topRight"
+    var logoWidth = 15.0
+
+    func validate() throws {
+        guard [0,15,25,35,50,75,100].contains(originalVolume), [0,1].contains(voice),
+              [26.0,30,36].contains(size), mask?.valid != false, blurStrength.isFinite, (5...40).contains(blurStrength),
+              logoWidth.isFinite, (5...30).contains(logoWidth), ["topLeft","topRight","bottomLeft","bottomRight"].contains(logoCorner),
+              logoName == nil || logoName == "channel-logo.png" else { throw AppError.message("Tùy chỉnh xuất video không hợp lệ.") }
+    }
 }
 
 enum ProjectDisk {
@@ -96,3 +129,4 @@ enum ProjectDisk {
         }.sorted { $0.created > $1.created }
     }
 }
+

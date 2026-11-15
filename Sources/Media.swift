@@ -3,11 +3,19 @@ import AVFoundation
 import CoreImage
 import CoreText
 import CryptoKit
+import ImageIO
 
 struct CaptionStyle {
     var size = 30.0
     var top = false
     var yellow = false
+    var burnSubtitles = true
+    var mask: MaskRegion?
+    var solidMask = false
+    var blurStrength = 20.0
+    var logo: URL?
+    var logoCorner = "topRight"
+    var logoWidth = 15.0
 }
 
 enum Media {
@@ -67,7 +75,7 @@ enum Media {
 
     static func hash(_ data: Data) -> String { SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined() }
 
-    static func export(_ project: VideoProject, cues: [Subtitle], style: CaptionStyle) async throws -> URL {
+    static func export(_ project: VideoProject, cues: [Subtitle], style: CaptionStyle, timeline: DubTimeline? = nil, originalVolume: Int = 100) async throws -> URL {
         try Task.checkCancellation()
         guard !cues.isEmpty else { throw AppError.message("Chưa có phụ đề để chèn vào video.") }
         try SRT.validate(cues, duration: project.duration)
@@ -77,6 +85,7 @@ enum Media {
         guard let sourceVideo = try await asset.loadTracks(withMediaType: .video).first else { throw AppError.message("Không đọc được hình video.") }
         let duration = try await asset.load(.duration)
         let composition = AVMutableComposition()
+        var originalTracks: [AVMutableCompositionTrack] = []
         guard let video = composition.addMutableTrack(withMediaType: .video, preferredTrackID: kCMPersistentTrackID_Invalid) else { throw AppError.message("Không tạo được luồng xuất video.") }
         try video.insertTimeRange(CMTimeRange(start: .zero, duration: duration), of: sourceVideo, at: .zero)
         for track in try await asset.loadTracks(withMediaType: .audio).prefix(1) {
@@ -84,6 +93,27 @@ enum Media {
             if range.duration.seconds > 0 {
                 guard let audio = composition.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid) else { throw AppError.message("Không tạo được luồng tiếng gốc.") }
                 try audio.insertTimeRange(range, of: track, at: range.start)
+                originalTracks.append(audio)
+            }
+        }
+        if let timeline {
+            guard [0,15,25,35,50,75,100].contains(originalVolume) else { throw AppError.message("Mức tiếng gốc không hợp lệ.") }
+            for change in timeline.stretches.reversed() {
+                composition.scaleTimeRange(CMTimeRange(start: CMTime(seconds: change.start, preferredTimescale: 48000), duration: CMTime(seconds: change.end - change.start, preferredTimescale: 48000)), toDuration: CMTime(seconds: (change.end - change.start) * change.factor, preferredTimescale: 48000))
+            }
+        }
+        var voiceTrack: AVMutableCompositionTrack?
+        if let timeline {
+            voiceTrack = composition.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid)
+            guard let voiceTrack else { throw AppError.message("Không tạo được luồng lồng tiếng.") }
+            for plan in timeline.plans {
+                try Task.checkCancellation()
+                let clip = AVURLAsset(url: plan.file)
+                guard let track = try await clip.loadTracks(withMediaType: .audio).first else { throw AppError.message("Tệp giọng bị hỏng.") }
+                let range = CMTimeRange(start: .zero, duration: CMTime(seconds: plan.seconds, preferredTimescale: 48000))
+                let start = CMTime(seconds: plan.cue.start, preferredTimescale: 48000)
+                try voiceTrack.insertTimeRange(range, of: track, at: start)
+                voiceTrack.scaleTimeRange(CMTimeRange(start: start, duration: range.duration), toDuration: CMTime(seconds: plan.seconds / plan.speed, preferredTimescale: 48000))
             }
         }
         let transform = try await sourceVideo.load(.preferredTransform)
@@ -92,7 +122,8 @@ enum Media {
         let size = CGSize(width: abs(bounds.width), height: abs(bounds.height))
         guard size.width > 0, size.height > 0 else { throw AppError.message("Kích thước video không hợp lệ.") }
         video.preferredTransform = transform
-        let captions = CaptionRenderer(cues: cues, style: style)
+        let outputCues = timeline?.plans.map(\.cue) ?? cues
+        let captions = try CaptionRenderer(cues: style.burnSubtitles ? outputCues : [], style: style)
         let base = AVVideoComposition(asset: composition, applyingCIFiltersWithHandler: { request in
             do {
                 let image = try captions.apply(to: request.sourceImage, at: request.compositionTime.seconds)
@@ -110,6 +141,23 @@ enum Media {
         export.outputURL = partial
         export.outputFileType = .mp4
         export.videoComposition = videoComposition
+        if let voiceTrack {
+            let mix = AVMutableAudioMix()
+            let original = Double(originalVolume) / 100
+            let headroom = min(1, 0.90 / (original + 0.65))
+            var parameters: [AVMutableAudioMixInputParameters] = []
+            for track in originalTracks {
+                let value = AVMutableAudioMixInputParameters(track: track)
+                value.setVolume(Float(original * headroom), at: .zero)
+                value.audioTimePitchAlgorithm = .spectral
+                parameters.append(value)
+            }
+            let voice = AVMutableAudioMixInputParameters(track: voiceTrack)
+            voice.setVolume(Float(headroom), at: .zero); voice.audioTimePitchAlgorithm = .timeDomain
+            parameters.append(voice); mix.inputParameters = parameters
+            export.audioMix = mix
+            export.audioTimePitchAlgorithm = .spectral
+        }
         export.shouldOptimizeForNetworkUse = true
         do {
             try await withTaskCancellationHandler(operation: {
@@ -135,19 +183,39 @@ private final class CaptionRenderer {
     private let cues: [Subtitle]
     private let style: CaptionStyle
     private let cache = NSCache<NSString, CIImage>()
-    init(cues: [Subtitle], style: CaptionStyle) {
+    private let logo: CIImage?
+    init(cues: [Subtitle], style: CaptionStyle) throws {
         self.cues = cues; self.style = style
         cache.totalCostLimit = 16 * 1024 * 1024
+        if let url = style.logo {
+            guard let source = CGImageSourceCreateWithURL(url as CFURL, nil), let image = CGImageSourceCreateThumbnailAtIndex(source, 0, [kCGImageSourceCreateThumbnailFromImageAlways: true, kCGImageSourceThumbnailMaxPixelSize: 1024, kCGImageSourceCreateThumbnailWithTransform: true] as CFDictionary) else { throw AppError.message("Không đọc được logo kênh.") }
+            logo = CIImage(cgImage: image)
+        } else { logo = nil }
     }
     func apply(to source: CIImage, at seconds: Double) throws -> CIImage {
+        let extent = source.extent
+        var background = source
+        if let mask = style.mask {
+            guard mask.valid else { throw AppError.message("Vùng làm mờ nằm ngoài video.") }
+            let rect = CGRect(x: extent.minX + extent.width * mask.x, y: extent.minY + extent.height * (1 - mask.y - mask.height), width: extent.width * mask.width, height: extent.height * mask.height)
+            let covered = style.solidMask ? CIImage(color: CIColor(red: 0, green: 0, blue: 0, alpha: 0.82)).cropped(to: rect) : source.clampedToExtent().applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: style.blurStrength]).cropped(to: rect)
+            background = covered.composited(over: background)
+        }
+        if let logo {
+            let scale = min(extent.width * style.logoWidth / 100 / logo.extent.width, extent.height * 0.3 / logo.extent.height)
+            let resized = logo.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
+            let padding = max(8, extent.width * 0.025)
+            let x = style.logoCorner.hasSuffix("Left") ? extent.minX + padding : extent.maxX - padding - resized.extent.width
+            let y = style.logoCorner.hasPrefix("top") ? extent.maxY - padding - resized.extent.height : extent.minY + padding
+            background = resized.transformed(by: CGAffineTransform(translationX: x, y: y)).composited(over: background)
+        }
         var low = 0, high = cues.count
         while low < high {
             let middle = (low + high) / 2
             if cues[middle].start <= seconds { low = middle + 1 } else { high = middle }
         }
-        guard low > 0, seconds < cues[low - 1].end else { return source }
+        guard low > 0, seconds < cues[low - 1].end else { return background.cropped(to: extent) }
         let text = cues[low - 1].text
-        let extent = source.extent
         let key = "\(extent.width)|\(extent.height)|\(text)" as NSString
         let image: CIImage
         if let cached = cache.object(forKey: key) { image = cached }
@@ -157,7 +225,7 @@ private final class CaptionRenderer {
         }
         let y = style.top ? extent.maxY - extent.height * 0.07 - image.extent.height : extent.minY + extent.height * 0.07
         let x = extent.minX + (extent.width - image.extent.width) / 2
-        return image.transformed(by: CGAffineTransform(translationX: x, y: y)).composited(over: source).cropped(to: extent)
+        return image.transformed(by: CGAffineTransform(translationX: x, y: y)).composited(over: background).cropped(to: extent)
     }
     private func bitmap(_ text: String, width: CGFloat, height: CGFloat) throws -> CIImage {
         let font = CTFontCreateWithName("HelveticaNeue-Bold" as CFString, max(14, width / 1080 * style.size), nil)
@@ -183,3 +251,4 @@ private final class CaptionRenderer {
         return CIImage(cgImage: cg)
     }
 }
+

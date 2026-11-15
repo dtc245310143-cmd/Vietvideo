@@ -125,3 +125,61 @@ final class MediaTests: XCTestCase {
         XCTAssertEqual(size.width, 180); XCTAssertEqual(size.height, 320)
     }
 }
+
+
+extension MediaTests {
+    private func tone(_ audio: Data, frequency: Double) -> Double {
+        let values = audio.dropFirst(44).withUnsafeBytes { Array($0.bindMemory(to: Int16.self)) }
+        var re = 0.0, im = 0.0
+        for (i,v) in values.enumerated() { let a = Double(i) * .pi * 2 * frequency / 16000; re += Double(v) / 32768 * cos(a); im += Double(v) / 32768 * sin(a) }
+        return 2 * sqrt(re * re + im * im) / Double(values.count)
+    }
+    func testDubStretchMixesAtConstantBackgroundAndCanHideSubtitles() async throws {
+        let id = UUID(), folder = ProjectDisk.folder(id)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let video = try await source(folder: folder, rotated: false)
+        let voice = folder.appendingPathComponent("voice.wav")
+        let samples = (0..<144000).map { Float(sin(Double($0) * .pi * 2 * 880 / 48000) * 0.4) }
+        try Dubbing.write(samples, to: voice)
+        let cue = Subtitle(start: 0.3, end: 0.6, text: "Đây là một câu thoại dài.")
+        let timeline = try Dubbing.schedule([cue], files: [voice], seconds: [3], duration: 2)
+        let project = VideoProject(id: id, title: "Dub test", duration: 2, movieName: video.lastPathComponent)
+        var style = CaptionStyle(); style.burnSubtitles = false
+        let output = try await Media.export(project, cues: [cue], style: style, timeline: timeline, originalVolume: 25)
+        let duration = try await Media.duration(output)
+        XCTAssertEqual(duration, timeline.duration, accuracy: 0.1)
+        let before = try await Media.audio(output, start: 0.02, length: 0.2)
+        let during = try await Media.audio(output, start: 1.1, length: 0.2)
+        XCTAssertEqual(tone(before, frequency: 440), 0.0625, accuracy: 0.02)
+        XCTAssertEqual(tone(during, frequency: 440), tone(before, frequency: 440), accuracy: 0.02)
+        XCTAssertGreaterThan(tone(during, frequency: 880), 0.15)
+        let generator = AVAssetImageGenerator(asset: AVURLAsset(url: output))
+        let result = try await generator.image(at: CMTime(seconds: 1, preferredTimescale: 600))
+        XCTAssertLessThan(try whitePixels(result.image), 20)
+    }
+    func testLogoAndMaskAreAppliedWithSubtitlesOff() async throws {
+        let id = UUID(), folder = ProjectDisk.folder(id)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let video = try await source(folder: folder, rotated: false)
+        let logo = folder.appendingPathComponent("channel-logo.png")
+        let data = await MainActor.run { UIGraphicsImageRenderer(size: CGSize(width: 40,height:40)).image { context in UIColor.red.setFill();context.fill(CGRect(x:0,y:0,width:40,height:40)) }.pngData()! }
+        try data.write(to: logo)
+        let project = VideoProject(id: id, title: "Artwork", duration: 2, movieName: video.lastPathComponent)
+        var style = CaptionStyle(); style.burnSubtitles = false; style.logo = logo; style.logoCorner = "topRight"; style.logoWidth = 20
+        style.mask = MaskRegion(x:0.05,y:0.7,width:0.9,height:0.2);style.solidMask = true
+        let output = try await Media.export(project, cues: [Subtitle(start:0.3,end:1.5,text:"Hidden")], style:style)
+        let generator = AVAssetImageGenerator(asset: AVURLAsset(url:output))
+        let image = try await generator.image(at: CMTime(seconds:1,preferredTimescale:600)).image
+        let w=image.width,h=image.height
+        var pixels=[UInt8](repeating:0,count:w*h*4)
+        pixels.withUnsafeMutableBytes { bytes in
+            let context=CGContext(data:bytes.baseAddress,width:w,height:h,bitsPerComponent:8,bytesPerRow:w*4,space:CGColorSpaceCreateDeviceRGB(),bitmapInfo:CGImageAlphaInfo.premultipliedLast.rawValue)!
+            context.draw(image,in:CGRect(x:0,y:0,width:CGFloat(w),height:CGFloat(h)))
+        }
+        XCTAssertGreaterThan(stride(from:0,to:pixels.count,by:4).filter { pixels[$0] > 180 && pixels[$0+1] < 70 && pixels[$0+2] < 70 }.count,100)
+        XCTAssertGreaterThan(stride(from:0,to:pixels.count,by:4).filter { pixels[$0] < 40 && pixels[$0+1] < 40 && pixels[$0+2] < 90 }.count,1000)
+    }
+}
+

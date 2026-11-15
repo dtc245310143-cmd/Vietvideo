@@ -34,3 +34,4 @@ final class SubtitleTests: XCTestCase {
         XCTAssertNotEqual(Media.hash(data), Media.hash(Data()))
     }
 }
+

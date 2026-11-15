@@ -26,3 +26,4 @@ class DownloadTests(unittest.TestCase):
             fetch(item, folder)
             self.assertEqual((folder / 'model.onnx').read_bytes(), b'weights')
 
+

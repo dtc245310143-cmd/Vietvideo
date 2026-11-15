@@ -1,21 +1,25 @@
-# VietVideo iOS Beta 0.2
+# VietVideo iOS 1.0
 
-Bản chuyển sang iPhone đang phát triển, **chưa đủ chức năng 4.4.4 Windows**. Bản 0.1 kiểm tra hai giọng đã build và qua kiểm tra suy luận trong simulator; người dùng đã thử trên iPhone 14 Plus/iOS 27.0 và báo có vẻ ổn.
+Ứng dụng iPhone độc lập, giao diện Studio, Khám phá, Dự án và Cài đặt; biểu tượng ứng dụng riêng. Giữ bundle ID của bản thử để cập nhật bằng iLoader.
 
-Bản 0.2 thêm chọn video từ Ảnh/Tệp, lưu/mở dự án, nhận diện và dịch bằng Gemini, chọn nhiều ngôn ngữ, lưu key trong Keychain, sửa/nhập/xuất SRT, nhận diện lại khoảng thiếu theo cửa sổ 10 giây, tự thử lại tối đa 3 lần khi kết quả rỗng, xuất MP4 với phụ đề Việt và giữ âm lượng tiếng gốc. Có tùy chọn cỡ chữ/màu/vị trí và chia sẻ kết quả ra Tệp/Ảnh. Bản này chưa gọi Gemini thật trong CI.
+- Nhập video từ Ảnh/Tệp hoặc link YouTube, Bilibili, Douyin; tìm kiếm có ảnh và thời lượng. Douyin dùng trình duyệt trong app để tìm/mở video rồi lấy danh sách. Đăng nhập/xác minh do người dùng thực hiện khi nguồn yêu cầu.
+- Nhận diện nhiều ngôn ngữ và dịch bằng Gemini, sửa/nhập/xuất SRT, nhận diện lại khoảng thiếu; kết quả rỗng tự thử lại tối đa 3 lần. Không thể bảo đảm mọi lời thoại đều được nhận diện đúng.
+- Xuất chỉ vietsub hoặc lồng tiếng bằng một trong hai giọng đã duyệt, tạo giọng trực tiếp trên iPhone. Có thể tắt phụ đề khi lồng tiếng. Cache câu đã tạo giúp tiếp tục công việc.
+- Tiếng gốc mặc định 25% khi lồng tiếng, chọn 0/15/25/35/50/75/100; giữ mức cố định cả video. Câu dài được căn thời gian bằng cách kéo giãn đoạn hình/tiếng gốc, không bỏ bớt lời.
+- Chọn vùng làm mờ/che chữ gốc trên khung xem trước, chỉnh kiểu/cỡ/vị trí phụ đề, thêm logo ở bốn góc.
+- Lưu dự án và chia sẻ MP4/SRT ra Tệp/Ảnh. Dữ liệu ở Tệp → Trên iPhone → VietVideo → VietVideo.
 
-Hai giọng hiện vẫn đọc câu mẫu. Chưa chuyển phát âm văn bản bất kỳ, lồng tiếng video, tìm/tải video từ link, làm mờ chữ, logo và retiming. Không dùng giọng iOS thay cho hai giọng đã chọn. Không gọi bản này là full 4.4.4.
-
-Video/dự án ở Tệp → Trên iPhone → VietVideo iOS → VietVideo. Gemini cần Internet, dùng hạn mức và xử lý âm thanh gửi lên Google khi người dùng bấm nhận diện/dịch. Key chỉ nằm ở Keychain, không vào GitHub hay URL yêu cầu. Giữ ứng dụng mở trong lúc xử lý; khi về nền, app yêu cầu dừng và giữ dự án/cache đã hoàn thành.
+Giữ app mở trong lúc xử lý; iOS có thể dừng công việc khi app về nền. Gemini cần mạng và hạn mức của key; key lưu ở Keychain, không đưa vào dự án/GitHub. Link nguồn có thể bị giới hạn bởi đăng nhập, xác minh, khu vực hoặc thay đổi của nền tảng. Không dùng máy chủ trung gian để tạo giọng hay tải video. Bộ lọc tiếng rè nhẹ không thể khôi phục mọi bản thu hỏng.
 
 ## Build và cài
 
-Dùng workflow **VietVideo iOS beta**. Giữ Actions secret `VIETVIDEO_CALIBRATION_B64` đã thiết lập trong kho Vietvideo. Tải artifact **VietVideo-iOS-Beta-0.2**, giải nén lấy IPA, nhập iLoader để ký/cài. Bundle identifier giữ nguyên để cập nhật bản thử trước.
+Workflow **VietVideo iOS** dùng Actions secret `VIETVIDEO_CALIBRATION_B64` đã thiết lập. Sau khi build và kiểm tra thành công, tải artifact **VietVideo-iOS-1.0**, giải nén IPA và dùng iLoader ký/cài. Thiếu secret chỉ kiểm tra biên dịch, không phát hành IPA thiếu giọng.
 
-Nếu thiếu secret, chỉ kiểm tra biên dịch, không phát hành IPA thiếu bộ giọng. Các model công khai được cố định revision và kiểm tra SHA-256. Không đưa `.local` hoặc `Assets/Calibration` lên GitHub. IPA chứa dữ liệu cần tạo giọng, nên chỉ chia sẻ trong phạm vi được phép.
+Model cố định revision và SHA-256; không đưa `.local`, `Assets/Calibration`, `Assets/Models` lên GitHub. IPA chứa dữ liệu tạo giọng, chỉ phân phối trong phạm vi được phép.
 
 ## Kiểm tra
 
-CI không có Gemini API key. XCTest kiểm tra SRT/Unicode/mốc thời gian, kiểm tra dữ liệu nhận diện, hai giọng ONNX, tách âm thanh, xuất phụ đề lên video ngang/dọc, tiếng gốc và hủy không phá kết quả cũ. Việc nhận diện/dịch thực tế và chất lượng trên iPhone vẫn cần kiểm tra bằng key của người dùng.
+CI kiểm tra parser/Unicode/mốc thời gian, hai giọng ONNX với câu bất kỳ, phát âm/tokenization đối chiếu bản Windows, trộn tiếng gốc cố định, căn câu dài, phụ đề video ngang/dọc, che chữ/logo, hủy tác vụ và giới hạn cookie theo tên miền. CI không có Gemini API key; cần kiểm tra nhận diện thực tế, nguồn cần đăng nhập và hiệu năng video dài trên iPhone.
 
-Mã nền chuyển từ bản Windows theo GPL-3.0 (`LICENSE`). ONNX Runtime dùng MIT. Xem model cards/giấy phép ở nguồn Hugging Face trong `Assets/model-manifest.json` trước khi phân phối lại model. `THIRD_PARTY-Windows.md` là hồ sơ gốc, không khẳng định mọi thư viện Windows đã chuyển lên iOS.
+Mã nền theo GPL-3.0 (`LICENSE`). ONNX Runtime và YouTubeKit theo giấy phép của dự án; sea-g2p Apache-2.0. Xem model cards/giấy phép từ nguồn trong `Assets/model-manifest.json` trước khi phân phối lại model. `THIRD_PARTY-Windows.md` là hồ sơ gốc, không khẳng định mọi thư viện Windows đã chuyển lên iOS.
+

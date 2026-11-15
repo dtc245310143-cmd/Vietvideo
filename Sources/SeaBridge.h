@@ -8,3 +8,4 @@ char *sea_g2p_phonemize(const sea_g2p *handle, const char *text, int punctuation
 const char *sea_g2p_last_error(void);
 void sea_g2p_string_free(char *value);
 #endif
+

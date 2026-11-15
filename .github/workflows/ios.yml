@@ -1,4 +1,4 @@
-name: VietVideo iOS beta
+name: VietVideo iOS
 on:
   workflow_dispatch:
   push:
@@ -58,7 +58,7 @@ jobs:
           mkdir -p build/Payload
           cp -R build/Build/Products/Release-iphoneos/VietVideoVoiceCheck.app build/Payload/
           cd build
-          zip -qr VietVideo-iOS-Beta-0.2-unsigned.ipa Payload
+          zip -qr VietVideo-iOS-1.0-unsigned.ipa Payload
       - name: Test voices, subtitles and local video export
         timeout-minutes: 20
         if: steps.voices.outputs.available == 'true'
@@ -76,9 +76,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: VietVideo-iOS-Beta-0.2
+          name: VietVideo-iOS-1.0
           path: |
             build/*.ipa
             build/*.log
             build/test-summary.json
           retention-days: 7
+

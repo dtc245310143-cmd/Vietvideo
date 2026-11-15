@@ -30,3 +30,4 @@ if __name__ == '__main__':
         print('Downloading ' + item['name'], flush=True)
         fetch(item, ROOT / 'Assets/Models')
 
+
