@@ -45,6 +45,8 @@ final class DubbingTests: XCTestCase {
         XCTAssertNil(short.value(forHTTPHeaderField: "Cookie"))
         let page = VideoSources.request(URL(string: "https://www.bilibili.com/video/BVabc")!, platform: .bilibili, cookies: [cookie])
         XCTAssertTrue(page.value(forHTTPHeaderField: "Cookie")?.contains("fake-value") == true)
+        let youtube = VideoSources.request(URL(string: "https://www.youtube.com/results?search_query=test")!, platform: .youtube, cookies: [])
+        XCTAssertTrue(youtube.value(forHTTPHeaderField: "User-Agent")?.contains("Windows") == true)
         let object = try VideoSources.json(after: "_ROUTER_DATA", in: "window._ROUTER_DATA = {\"text\":\"brace } and escaped \\\"\",\"value\":{\"n\":3}}; ignored();")
         XCTAssertEqual((object["value"] as? [String: Int])?["n"], 3)
     }

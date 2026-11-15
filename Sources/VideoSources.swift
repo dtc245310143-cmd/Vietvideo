@@ -95,7 +95,7 @@ enum VideoSources {
     }
     static func request(_ url: URL, platform: VideoPlatform, cookies: [HTTPCookie]) -> URLRequest {
         var request = URLRequest(url: url)
-        request.setValue(userAgent, forHTTPHeaderField: "User-Agent")
+        request.setValue(platform == .youtube ? "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36" : userAgent, forHTTPHeaderField: "User-Agent")
         request.setValue(platform.searchURL("").absoluteString, forHTTPHeaderField: "Referer")
         if VideoPlatform.belongs(url, to: platform.domains) {
             let host = url.host?.lowercased() ?? ""

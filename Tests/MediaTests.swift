@@ -140,7 +140,10 @@ extension MediaTests {
         defer { try? FileManager.default.removeItem(at: folder) }
         let video = try await source(folder: folder, rotated: false)
         let voice = folder.appendingPathComponent("voice.wav")
-        let samples = (0..<144000).map { Float(sin(Double($0) * .pi * 2 * 880 / 48000) * 0.4) }
+        let angularStep = 2.0 * Double.pi * 880.0 / 48000.0
+        let samples: [Float] = (0..<144000).map { index in
+            Float(sin(Double(index) * angularStep) * 0.4)
+        }
         try Dubbing.write(samples, to: voice)
         let cue = Subtitle(start: 0.3, end: 0.6, text: "Đây là một câu thoại dài.")
         let timeline = try Dubbing.schedule([cue], files: [voice], seconds: [3], duration: 2)
