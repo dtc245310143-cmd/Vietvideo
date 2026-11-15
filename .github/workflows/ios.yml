@@ -30,6 +30,12 @@ jobs:
             echo "available=false" >> "$GITHUB_OUTPUT"
             echo "Voice secret missing: checking compilation only, no IPA will be published." >> "$GITHUB_STEP_SUMMARY"
           fi
+      - name: Start simulator while dependencies build
+        if: steps.voices.outputs.available == 'true'
+        run: |
+          DEVICE=$(xcrun simctl list devices available -j | python3 -c 'import sys,json; print(next(d["udid"] for rows in json.load(sys.stdin)["devices"].values() for d in rows if d["name"].startswith("iPhone")))')
+          echo "IOS_SIMULATOR=$DEVICE" >> "$GITHUB_ENV"
+          xcrun simctl boot "$DEVICE" || true
       - name: Fetch exact desktop voice models
         if: steps.voices.outputs.available == 'true'
         run: python3 Scripts/fetch_models.py
@@ -40,7 +46,15 @@ jobs:
         run: |
           python3 -m pip install numpy==2.2.6
           python3 Scripts/prepare_calibration.py
+      - uses: actions/cache@v4
+        id: phonemizer
+        with:
+          path: |
+            Vendor/SeaG2P.xcframework
+            Assets/ThirdParty/sea-g2p-LICENSE.txt
+          key: sea-g2p-macos26-${{ runner.arch }}-${{ hashFiles('Scripts/build_phonemizer.py') }}
       - name: Build native Vietnamese phonemizer
+        if: steps.phonemizer.outputs.cache-hit != 'true' 
         run: python3 Scripts/build_phonemizer.py
       - name: Create Xcode project
         run: |
@@ -58,7 +72,7 @@ jobs:
           mkdir -p build/Payload
           cp -R build/Build/Products/Release-iphoneos/VietVideoVoiceCheck.app build/Payload/
           cd build
-          zip -qr VietVideo-iOS-1.0-unsigned.ipa Payload
+          zip -qr VietVideo-iOS-1.0.1-unsigned.ipa Payload
       - name: Test voices, subtitles and local video export
         timeout-minutes: 20
         if: steps.voices.outputs.available == 'true'
@@ -93,7 +107,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: VietVideo-iOS-1.0
+          name: VietVideo-iOS-1.0.1
           path: |
             build/*.ipa
             build/*.log

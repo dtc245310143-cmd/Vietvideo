@@ -69,11 +69,11 @@ struct StudioView: View {
                     }.disabled(busy)
                     VStack(alignment: .leading, spacing: 16) {
                         Label("Nguồn video", systemImage: "film.stack").font(.headline)
-                        HStack(spacing: 12) {
-                            PhotosPicker(selection: $photo, matching: .videos) { Label("Ảnh", systemImage: "photo.on.rectangle") }
-                            Button { files = true } label: { Label("Tệp", systemImage: "folder") }
-                            Button(action: openSearch) { Label("Tìm video", systemImage: "magnifyingglass") }
-                        }.buttonStyle(.bordered).controlSize(.large).disabled(busy)
+                        HStack(spacing: 10) {
+                            PhotosPicker(selection: $photo, matching: .videos) { sourceAction("Ảnh", "photo.on.rectangle") }
+                            Button { files = true } label: { sourceAction("Tệp", "folder") }
+                            Button(action: openSearch) { sourceAction("Tìm video", "magnifyingglass") }
+                        }.buttonStyle(.plain).disabled(busy)
                         if let project = store.current {
                             HStack { Text(project.title).font(.subheadline.bold()).lineLimit(2); Spacer(); Text(clock(project.duration)).font(.caption.monospacedDigit()).foregroundStyle(Palette.cyan) }
                             if let player { VideoPlayer(player: player).frame(height: 220).clipShape(RoundedRectangle(cornerRadius: 16)) }
@@ -160,6 +160,13 @@ struct StudioView: View {
                 .sheet(isPresented: $dialogueSheet) { DialogueEditor() }
                 .sheet(isPresented: $voiceSheet) { VoiceCheckView() }
         }
+    }
+    private func sourceAction(_ title: String, _ symbol: String) -> some View {
+        VStack(spacing: 8) {
+            Image(systemName: symbol).font(.system(size: 23, weight: .medium))
+            Text(title).font(.system(size: 13, weight: .semibold)).lineLimit(1).minimumScaleFactor(0.8)
+        }.foregroundStyle(Palette.cyan).frame(maxWidth: .infinity).frame(height: 78)
+            .background(Palette.cyan.opacity(0.12), in: RoundedRectangle(cornerRadius: 16))
     }
     private func clock(_ seconds: Double) -> String { String(format: "%d:%02d", Int(seconds) / 60, Int(seconds) % 60) }
     private func step(_ number: String, _ title: String, complete: Bool) -> some View {

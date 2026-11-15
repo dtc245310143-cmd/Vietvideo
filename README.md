@@ -1,4 +1,4 @@
-# VietVideo iOS 1.0
+# VietVideo iOS 1.0.1
 
 Ứng dụng iPhone độc lập, giao diện Studio, Khám phá, Dự án và Cài đặt; biểu tượng ứng dụng riêng. Giữ bundle ID của bản thử để cập nhật bằng iLoader.
 
@@ -13,7 +13,7 @@ Giữ app mở trong lúc xử lý; iOS có thể dừng công việc khi app v�
 
 ## Build và cài
 
-Workflow **VietVideo iOS** dùng Actions secret `VIETVIDEO_CALIBRATION_B64` đã thiết lập. Sau khi build và kiểm tra thành công, tải artifact **VietVideo-iOS-1.0**, giải nén IPA và dùng iLoader ký/cài. Thiếu secret chỉ kiểm tra biên dịch, không phát hành IPA thiếu giọng.
+Workflow **VietVideo iOS** dùng Actions secret `VIETVIDEO_CALIBRATION_B64` đã thiết lập. Sau khi build và kiểm tra thành công, tải artifact **VietVideo-iOS-1.0.1**, giải nén IPA và dùng iLoader ký/cài. Thiếu secret chỉ kiểm tra biên dịch, không phát hành IPA thiếu giọng.
 
 Model cố định revision và SHA-256; không đưa `.local`, `Assets/Calibration`, `Assets/Models` lên GitHub. IPA chứa dữ liệu tạo giọng, chỉ phân phối trong phạm vi được phép.
 
