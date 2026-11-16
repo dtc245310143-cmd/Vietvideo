@@ -94,6 +94,7 @@ struct ExportSettings: Codable, Equatable {
     var size = 30.0
     var top = false
     var yellow = false
+    var subtitleBackground: SubtitleBackground?
     var mask: MaskRegion?
     var solidMask = false
     var blurStrength = 20.0
@@ -103,7 +104,7 @@ struct ExportSettings: Codable, Equatable {
 
     func validate() throws {
         guard [0,15,25,35,50,75,100].contains(originalVolume), VoicePresets.names.indices.contains(voice),
-              [26.0,30,36].contains(size), mask?.valid != false, blurStrength.isFinite, (5...40).contains(blurStrength),
+              [26.0,30,36].contains(size), subtitleBackground?.valid != false, mask?.valid != false, blurStrength.isFinite, (5...40).contains(blurStrength),
               logoWidth.isFinite, (5...30).contains(logoWidth), ["topLeft","topRight","bottomLeft","bottomRight"].contains(logoCorner),
               logoName == nil || logoName == "channel-logo.png" else { throw AppError.message("Tùy chỉnh xuất video không hợp lệ.") }
     }

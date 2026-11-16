@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 import PhotosUI
 import AVKit
 import UniformTypeIdentifiers
@@ -196,13 +197,49 @@ struct StudioView: View {
             Text("Câu dài được tự căn hình và tiếng, giữ cao độ và đủ lời.").font(.footnote).foregroundStyle(Palette.muted)
         }.studioPanel().disabled(busy)
     }
+    private var subtitleForeground: Color {
+        if let box = store.settings.subtitleBackground { return box.usesDarkText ? .black : .white }
+        return store.settings.yellow ? .yellow : .white
+    }
+    private var subtitleBackgroundColor: Binding<Color> {
+        Binding(get: {
+            let box = store.settings.subtitleBackground ?? .yellow
+            return Color(red: box.red, green: box.green, blue: box.blue)
+        }, set: { color in
+            var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+            if UIColor(color).getRed(&r, green: &g, blue: &b, alpha: &a) {
+                store.settings.subtitleBackground = SubtitleBackground(red: min(1, max(0, Double(r))), green: min(1, max(0, Double(g))), blue: min(1, max(0, Double(b))))
+            }
+        })
+    }
     private var picturePanel: some View {
         VStack(alignment: .leading, spacing: 16) {
             Label("Hình ảnh & phụ đề", systemImage: "wand.and.stars").font(.headline)
             if !store.settings.dub || store.settings.burnSubtitles {
                 Picker("Cỡ chữ", selection: $store.settings.size) { Text("Nhỏ").tag(26.0); Text("Vừa").tag(30.0); Text("Lớn").tag(36.0) }.pickerStyle(.segmented)
                 Toggle("Phụ đề phía trên", isOn: $store.settings.top)
-                Toggle("Chữ vàng", isOn: $store.settings.yellow)
+                Toggle("Nền phụ đề", isOn: Binding(get: { store.settings.subtitleBackground != nil }, set: { enabled in
+                    store.settings.subtitleBackground = enabled ? .yellow : nil
+                }))
+                if store.settings.subtitleBackground != nil {
+                    HStack(spacing: 10) {
+                        Button("Vàng") { store.settings.subtitleBackground = .yellow }.buttonStyle(.bordered)
+                        Button("Đen") { store.settings.subtitleBackground = .black }.buttonStyle(.bordered)
+                        ColorPicker("Màu khác", selection: subtitleBackgroundColor, supportsOpacity: false)
+                    }
+                    Text("Chữ tự chuyển sáng hoặc tối để dễ đọc trên màu nền.").font(.footnote).foregroundStyle(Palette.muted)
+                } else {
+                    Toggle("Chữ vàng", isOn: $store.settings.yellow)
+                }
+                Text("Xin chào, đây là phụ đề Việt.")
+                    .font(.system(size: 18, weight: .bold)).multilineTextAlignment(.center)
+                    .foregroundStyle(subtitleForeground)
+                    .padding(.horizontal, 12).padding(.vertical, 7)
+                    .background {
+                        if let box = store.settings.subtitleBackground {
+                            RoundedRectangle(cornerRadius: 8).fill(Color(red: box.red, green: box.green, blue: box.blue))
+                        }
+                    }.frame(maxWidth: .infinity).accessibilityLabel("Xem trước phụ đề")
             }
             Divider()
             Toggle("Làm mờ chữ phụ đề gốc", isOn: Binding(get: { store.settings.mask != nil }, set: { enabled in

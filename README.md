@@ -1,4 +1,4 @@
-# VietVideo iOS 1.0.4
+# VietVideo iOS 1.0.5
 
 Ứng dụng iPhone độc lập, giao diện Studio, Khám phá, Dự án và Cài đặt; biểu tượng ứng dụng riêng. Giữ bundle ID của bản thử để cập nhật bằng iLoader.
 
@@ -13,11 +13,11 @@
 
 Giữ app mở trong lúc xử lý; iOS có thể dừng công việc khi app về nền. Gemini cần mạng và hạn mức của key; key lưu ở Keychain, không đưa vào dự án/GitHub. Link nguồn có thể bị giới hạn bởi đăng nhập, xác minh, khu vực hoặc thay đổi của nền tảng. Không dùng máy chủ trung gian để tạo giọng hay tải video. Bộ lọc tiếng rè nhẹ không thể khôi phục mọi bản thu hỏng.
 
-Giọng 3 lấy theo video mẫu 15:43:20; Giọng 4 lấy theo video mẫu 15:42:39. Nghe mẫu tổng hợp tại VoicePreviews/voice-3.mp3 và VoicePreviews/voice-4.mp3. Hai giọng gốc và cache lồng tiếng cũ được giữ. Các preset bổ sung chỉ chứa vector giọng, không chứa mã âm thanh tham chiếu; mẫu đọc thử là câu tổng hợp mới.
+Giọng 3 lấy theo video mẫu 15:43:20; Giọng 4 lấy theo video mẫu 15:42:39. Nghe mẫu tổng hợp tại VoicePreviews/voice-3-revised-1.mp3 và VoicePreviews/voice-4-revised-1.mp3. Hai giọng gốc và cache lồng tiếng cũ được giữ. Các preset bổ sung chứa vector giọng và mã tham chiếu từ đoạn mẫu đã duyệt; MP3 đọc thử là câu tổng hợp mới.
 
 ## Build và cài
 
-Workflow **VietVideo iOS** dùng Actions secret `VIETVIDEO_CALIBRATION_B64` đã thiết lập. Sau khi build và kiểm tra thành công, tải artifact **VietVideo-iOS-1.0.4**, giải nén IPA và dùng iLoader ký/cài. Thiếu secret chỉ kiểm tra biên dịch, không phát hành IPA thiếu giọng.
+Workflow **VietVideo iOS** dùng Actions secret `VIETVIDEO_CALIBRATION_B64` đã thiết lập. Sau khi build và kiểm tra thành công, tải artifact **VietVideo-iOS-1.0.5**, giải nén IPA và dùng iLoader ký/cài. Thiếu secret chỉ kiểm tra biên dịch, không phát hành IPA thiếu giọng.
 
 Model cố định revision và SHA-256; không đưa `.local`, `Assets/Calibration`, `Assets/Models` lên GitHub. IPA chứa dữ liệu tạo giọng, chỉ phân phối trong phạm vi được phép.
 
@@ -27,3 +27,7 @@ CI kiểm tra parser/Unicode/mốc thời gian, bốn giọng ONNX với câu b�
 
 Mã nền theo GPL-3.0 (`LICENSE`). ONNX Runtime và YouTubeKit theo giấy phép của dự án; sea-g2p Apache-2.0. Xem model cards/giấy phép từ nguồn trong `Assets/model-manifest.json` trước khi phân phối lại model. `THIRD_PARTY-Windows.md` là hồ sơ gốc, không khẳng định mọi thư viện Windows đã chuyển lên iOS.
 
+
+## Nền phụ đề 1.0.5
+
+Trong Studio → Hình ảnh & phụ đề, bật Nền phụ đề rồi chọn Vàng, Đen hoặc Màu khác. Nền bo góc ôm theo câu; chữ tự chuyển đen/trắng để dễ đọc. Có xem trước và lưu màu theo dự án. Tắt Nền phụ đề để dùng kiểu chữ cũ. Giọng 3–4 đã thay bằng hai mẫu MP3 sửa lần 1 được người dùng duyệt. Hồ sơ giữ đoạn giọng tham chiếu và dùng phép chiếu Linear + LayerNorm đầy đủ, khớp bộ tạo bản MP3. Giọng 1–2 và âm thanh đã tạo bằng hai giọng cũ được giữ nguyên.

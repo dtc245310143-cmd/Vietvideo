@@ -10,6 +10,8 @@ final class VoiceEngineTests: XCTestCase {
         XCTAssertNotNil(engine.calibration.voices[0].identity)
         XCTAssertEqual(engine.calibration.voices[0].identity, engine.calibration.voices[1].identity)
         XCTAssertNotEqual(engine.calibration.voices[2].identity, engine.calibration.voices[3].identity)
+        XCTAssertFalse(engine.calibration.voices[2].referenceCodes.isEmpty)
+        XCTAssertFalse(engine.calibration.voices[3].referenceCodes.isEmpty)
         for voice in VoicePresets.names.indices {
             let samples = try engine.synthesize(voice: voice, maxFrames: 3, cancelled: { false }, progress: { _ in })
             XCTAssertGreaterThan(samples.count, 0)

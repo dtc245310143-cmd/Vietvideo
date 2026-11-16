@@ -230,6 +230,7 @@ final class ProjectStore: ObservableObject {
             } else { timeline = nil }
             try Task.checkCancellation()
             var render = style ?? CaptionStyle(size: chosen.size, top: chosen.top, yellow: chosen.yellow)
+            render.subtitleBackground = chosen.subtitleBackground
             render.burnSubtitles = !chosen.dub || chosen.burnSubtitles
             render.mask = chosen.mask; render.solidMask = chosen.solidMask; render.blurStrength = chosen.blurStrength
             render.logo = chosen.logoName.map { ProjectDisk.folder(initial.id).appendingPathComponent($0) }

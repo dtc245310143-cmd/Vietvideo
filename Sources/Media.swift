@@ -9,6 +9,7 @@ struct CaptionStyle {
     var size = 30.0
     var top = false
     var yellow = false
+    var subtitleBackground: SubtitleBackground?
     var burnSubtitles = true
     var mask: MaskRegion?
     var solidMask = false
@@ -194,6 +195,7 @@ private final class CaptionRenderer {
     private let cache = NSCache<NSString, CIImage>()
     private let logo: CIImage?
     init(cues: [Subtitle], style: CaptionStyle) throws {
+        guard style.subtitleBackground?.valid != false else { throw AppError.message("Màu nền phụ đề không hợp lệ.") }
         self.cues = cues; self.style = style
         cache.totalCostLimit = 16 * 1024 * 1024
         if let url = style.logo {
@@ -237,24 +239,37 @@ private final class CaptionRenderer {
         return image.transformed(by: CGAffineTransform(translationX: x, y: y)).composited(over: background).cropped(to: extent)
     }
     private func bitmap(_ text: String, width: CGFloat, height: CGFloat) throws -> CIImage {
-        let font = CTFontCreateWithName("HelveticaNeue-Bold" as CFString, max(14, width / 1080 * style.size), nil)
+        let fontSize = max(14, width / 1080 * style.size)
+        let font = CTFontCreateWithName("HelveticaNeue-Bold" as CFString, fontSize, nil)
         var alignment = CTTextAlignment.center
         let paragraph = withUnsafePointer(to: &alignment) { pointer in
             let setting = CTParagraphStyleSetting(spec: .alignment, valueSize: MemoryLayout<CTTextAlignment>.size, value: pointer)
             return CTParagraphStyleCreate([setting], 1)
         }
-        let color = CGColor(colorSpace: CGColorSpaceCreateDeviceRGB(), components: style.yellow ? [1, 1, 0, 1] : [1, 1, 1, 1])!
+        let color: CGColor
+        if let box = style.subtitleBackground { color = CGColor(gray: box.usesDarkText ? 0 : 1, alpha: 1) }
+        else { color = CGColor(colorSpace: CGColorSpaceCreateDeviceRGB(), components: style.yellow ? [1, 1, 0, 1] : [1, 1, 1, 1])! }
         let attributes: [NSAttributedString.Key: Any] = [NSAttributedString.Key(kCTFontAttributeName as String): font,
             NSAttributedString.Key(kCTForegroundColorAttributeName as String): color,
             NSAttributedString.Key(kCTParagraphStyleAttributeName as String): paragraph]
         let string = NSAttributedString(string: text, attributes: attributes)
         let setter = CTFramesetterCreateWithAttributedString(string as CFAttributedString)
-        let w = Int((width * 0.9).rounded(.down))
-        let suggested = CTFramesetterSuggestFrameSizeWithConstraints(setter, CFRange(location: 0, length: string.length), nil, CGSize(width: CGFloat(max(1, w - 12)), height: 10000), nil)
-        let h = Int(min(height * 0.4, ceil(suggested.height) + 12))
-        guard w > 0, h > 0, let context = CGContext(data: nil, width: w, height: h, bitsPerComponent: 8, bytesPerRow: w * 4, space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { throw AppError.message("Không đủ bộ nhớ để vẽ phụ đề.") }
-        context.setShadow(offset: CGSize(width: 1, height: -1), blur: 2, color: CGColor(gray: 0, alpha: 1))
-        let path = CGPath(rect: CGRect(x: 6, y: 6, width: CGFloat(w - 12), height: CGFloat(h - 12)), transform: nil)
+        let maximumWidth = floor(width * 0.9)
+        let padX: CGFloat = style.subtitleBackground == nil ? 6 : max(6, ceil(fontSize * 0.5))
+        let padY: CGFloat = style.subtitleBackground == nil ? 6 : max(4, ceil(fontSize * 0.25))
+        let suggested = CTFramesetterSuggestFrameSizeWithConstraints(setter, CFRange(location: 0, length: string.length), nil, CGSize(width: max(1, maximumWidth - 2 * padX), height: 10000), nil)
+        let w = Int(style.subtitleBackground == nil ? maximumWidth : min(maximumWidth, ceil(suggested.width) + 2 * padX))
+        let h = Int(min(height * 0.4, ceil(suggested.height) + 2 * padY))
+        guard w > 2 * Int(padX), h > 2 * Int(padY), let context = CGContext(data: nil, width: w, height: h, bitsPerComponent: 8, bytesPerRow: w * 4, space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { throw AppError.message("Không đủ bộ nhớ để vẽ phụ đề.") }
+        if let box = style.subtitleBackground {
+            context.setFillColor(CGColor(colorSpace: CGColorSpaceCreateDeviceRGB(), components: [CGFloat(box.red), CGFloat(box.green), CGFloat(box.blue), 1])!)
+            let corner = min(ceil(fontSize * 0.3), CGFloat(h) / 2)
+            context.addPath(CGPath(roundedRect: CGRect(x: 0, y: 0, width: CGFloat(w), height: CGFloat(h)), cornerWidth: corner, cornerHeight: corner, transform: nil))
+            context.fillPath()
+        } else {
+            context.setShadow(offset: CGSize(width: 1, height: -1), blur: 2, color: CGColor(gray: 0, alpha: 1))
+        }
+        let path = CGPath(rect: CGRect(x: padX, y: padY, width: CGFloat(w) - 2 * padX, height: CGFloat(h) - 2 * padY), transform: nil)
         CTFrameDraw(CTFramesetterCreateFrame(setter, CFRange(location: 0, length: string.length), path, nil), context)
         guard let cg = context.makeImage() else { throw AppError.message("Chưa vẽ được chữ phụ đề.") }
         return CIImage(cgImage: cg)

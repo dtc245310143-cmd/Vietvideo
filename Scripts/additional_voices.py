@@ -8,7 +8,9 @@ def merge_calibration(raw, additional):
     record = json.loads(raw)
     base = record.get("voices")
     hidden = record.get("hidden")
-    if not isinstance(base, list) or len(base) != 2 or not isinstance(hidden, int) or hidden <= 0:
+    channels = record.get("channels")
+    audio_vocab = record.get("audioVocab")
+    if not isinstance(base, list) or len(base) != 2 or not isinstance(hidden, int) or hidden <= 0 or type(channels) is not int or channels <= 0 or type(audio_vocab) is not int or audio_vocab <= 0:
         raise ValueError("Expected the two original voices in the existing Actions secret.")
     extra = additional.get("voices") if isinstance(additional, dict) else None
     if not isinstance(extra, list) or len(extra) != 2:
@@ -24,10 +26,16 @@ def merge_calibration(raw, additional):
             isinstance(v, (int, float)) and math.isfinite(v) for v in anchor
         ) or not any(v != 0 for v in anchor):
             raise ValueError("Additional voice has an invalid speaker anchor.")
-        if voice.get("referenceCodes", []) != []:
-            raise ValueError("Additional presets must not contain source audio codes.")
-        encoded = json.dumps(anchor, separators=(",", ":"), allow_nan=False).encode("utf-8")
-        base.append({"anchor": list(anchor), "referenceCodes": [],
+        codes = voice.get("referenceCodes", [])
+        if not isinstance(codes, list) or len(codes) > 100 or not all(
+            isinstance(frame, list) and len(frame) == channels and all(
+                type(code) is int and 0 <= code < audio_vocab for code in frame
+            ) for frame in codes
+        ):
+            raise ValueError("Additional voice has invalid reference audio codes.")
+        identity = {"anchor": anchor, "referenceCodes": codes} if codes else anchor
+        encoded = json.dumps(identity, separators=(",", ":"), allow_nan=False).encode("utf-8")
+        base.append({"anchor": list(anchor), "referenceCodes": [list(frame) for frame in codes],
                      "identity": hashlib.sha256(encoded).hexdigest()})
     return record
 

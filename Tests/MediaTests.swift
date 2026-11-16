@@ -75,6 +75,44 @@ final class MediaTests: XCTestCase {
         return stride(from: 0, to: rgba.count, by: 4).filter { rgba[$0] > 180 && rgba[$0 + 1] > 180 && rgba[$0 + 2] > 180 }.count
     }
 
+    private func pixels(_ image: CGImage, matching color: [Double]) throws -> Int {
+        let w = image.width, h = image.height
+        var rgba = [UInt8](repeating: 0, count: w * h * 4)
+        try rgba.withUnsafeMutableBytes { bytes in
+            let context = try XCTUnwrap(CGContext(data: bytes.baseAddress, width: w, height: h, bitsPerComponent: 8, bytesPerRow: w * 4, space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
+            context.draw(image, in: CGRect(x: 0, y: 0, width: CGFloat(w), height: CGFloat(h)))
+        }
+        return stride(from: 0, to: rgba.count, by: 4).filter { i in
+            (0..<3).allSatisfy { abs(Double(rgba[i + $0]) - color[$0] * 255) < 35 }
+        }.count
+    }
+    func testYellowBlackAndCustomSubtitleBoxesOnlyAppearDuringCues() async throws {
+        let id = UUID(), folder = ProjectDisk.folder(id)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let url = try await source(folder: folder, rotated: false)
+        let project = VideoProject(id: id, title: "Caption boxes", duration: 2, movieName: url.lastPathComponent)
+        let cue = Subtitle(start: 0.4, end: 1.6, text: "Chào anh, bên anh có ráp PC không?")
+        for (index, color) in [SubtitleBackground.yellow, .black, SubtitleBackground(red: 0.2, green: 0.7, blue: 0.35)].enumerated() {
+            var style = CaptionStyle()
+            style.subtitleBackground = color
+            let target = try await Media.export(project, cues: [cue], style: style)
+            let generator = AVAssetImageGenerator(asset: AVURLAsset(url: target))
+            generator.requestedTimeToleranceBefore = .zero; generator.requestedTimeToleranceAfter = .zero
+            let (visible, _) = try await generator.image(at: CMTime(seconds: 1, preferredTimescale: 600))
+            let (hidden, _) = try await generator.image(at: CMTime(seconds: 0.1, preferredTimescale: 600))
+            let qa = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("VietVideoQA")
+            try FileManager.default.createDirectory(at: qa, withIntermediateDirectories: true)
+            try XCTUnwrap(UIImage(cgImage: visible).pngData()).write(to: qa.appendingPathComponent("subtitle-\(index).png"))
+            let rgb = [color.red, color.green, color.blue]
+            XCTAssertGreaterThan(try pixels(visible, matching: rgb), 100)
+            XCTAssertLessThan(try pixels(visible, matching: rgb), visible.width * visible.height / 4)
+            XCTAssertLessThan(try pixels(hidden, matching: rgb), 10)
+            let foreground = color.usesDarkText ? 0.0 : 1.0
+            XCTAssertGreaterThan(try pixels(visible, matching: [foreground, foreground, foreground]), 8)
+        }
+    }
+
     func testLocalExportPreservesOriginalAudioAndAddsVisibleSubtitles() async throws {
         let id = UUID(), folder = ProjectDisk.folder(id)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
