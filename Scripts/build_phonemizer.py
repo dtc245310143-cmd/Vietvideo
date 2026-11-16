@@ -5,6 +5,7 @@ import subprocess
 import urllib.request
 import zipfile
 import platform
+import os
 import time
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -34,9 +35,11 @@ cargo.write_text(cargo.read_text().replace('["cdylib", "rlib"]', '["staticlib"]'
 simulator_target = 'x86_64-apple-ios' if platform.machine() == 'x86_64' else 'aarch64-apple-ios-sim'
 targets = ['aarch64-apple-ios', simulator_target]
 subprocess.run(['rustup', 'target', 'add', *targets], check=True)
+# Level 1 keeps release optimization without costly level-3 compilation on hosted Macs.
+build_env = {**os.environ, 'CARGO_PROFILE_RELEASE_OPT_LEVEL': '1'}
 for target in targets:
     print(f'Building phonemizer: {target}', flush=True)
-    subprocess.run(['cargo', 'build', '--release', '--locked', '--no-default-features', '--features', 'capi', '--target', target], cwd=source, check=True)
+    subprocess.run(['cargo', 'build', '--release', '--locked', '--no-default-features', '--features', 'capi', '--target', target], cwd=source, env=build_env, check=True)
 output = vendor / 'SeaG2P.xcframework'
 if output.exists(): shutil.rmtree(output)
 args = ['xcodebuild', '-create-xcframework']
