@@ -1,118 +1,235 @@
 name: VietVideo iOS
+
 on:
+
   workflow_dispatch:
+
   push:
+
     branches: [main]
+
 permissions:
+
   contents: read
+
 concurrency:
+
   group: ios-${{ github.ref }}
+
   cancel-in-progress: true
+
 jobs:
+
   build:
-    runs-on: macos-15
+
+    runs-on: macos-15-intel
+
     timeout-minutes: 60
+
     steps:
+
       - uses: actions/checkout@v4
+
       - name: Select Xcode 26
         run: sudo xcode-select --switch /Applications/Xcode_26.3.app/Contents/Developer
       - uses: actions/setup-python@v5
+
         with:
+
           python-version: '3.12'
+
       - name: Verify model download code
+
         run: python3 -m unittest discover -s Scripts -p 'test_*.py'
+
       - name: Check private voice setup
+
         id: voices
+
         env:
+
           VOICES: ${{ secrets.VIETVIDEO_CALIBRATION_B64 }}
+
         run: |
+
           if [ -n "$VOICES" ]; then
+
             echo "available=true" >> "$GITHUB_OUTPUT"
+
           else
+
             echo "available=false" >> "$GITHUB_OUTPUT"
+
             echo "Voice secret missing: checking compilation only, no IPA will be published." >> "$GITHUB_STEP_SUMMARY"
+
           fi
+
       - name: Start simulator while dependencies build
+
         if: steps.voices.outputs.available == 'true'
+
         run: |
+
           DEVICE=$(xcrun simctl list devices available -j | python3 -c 'import sys,json; print(next(d["udid"] for rows in json.load(sys.stdin)["devices"].values() for d in rows if d["name"].startswith("iPhone")))')
+
           echo "IOS_SIMULATOR=$DEVICE" >> "$GITHUB_ENV"
+
           xcrun simctl boot "$DEVICE" || true
+
       - name: Fetch exact desktop voice models
+
         if: steps.voices.outputs.available == 'true'
+
         run: python3 Scripts/fetch_models.py
+
       - name: Restore private voice calibration
+
         if: steps.voices.outputs.available == 'true'
+
         env:
+
           VIETVIDEO_CALIBRATION_B64: ${{ secrets.VIETVIDEO_CALIBRATION_B64 }}
+
         run: |
+
           python3 -m pip install numpy==2.2.6
+
           python3 Scripts/prepare_calibration.py
+
       - uses: actions/cache@v4
+
         id: phonemizer
+
         with:
+
           path: |
+
             Vendor/SeaG2P.xcframework
+
             Assets/ThirdParty/sea-g2p-LICENSE.txt
+
           key: sea-g2p-macos26-${{ runner.arch }}-${{ hashFiles('Scripts/build_phonemizer.py') }}
+
       - name: Build native Vietnamese phonemizer
+
         if: steps.phonemizer.outputs.cache-hit != 'true' 
+
         run: python3 Scripts/build_phonemizer.py
+
       - name: Create Xcode project
+
         run: |
+
           brew install xcodegen
+
           xcodegen generate
+
           pod install
+
       - name: Build for iPhone
+
         run: |
+
           set -o pipefail
+
           mkdir -p build
+
           xcodebuild -workspace VietVideoVoiceCheck.xcworkspace -scheme VietVideoVoiceCheck -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath build CODE_SIGNING_ALLOWED=NO build | tee build/iphone-build.log
+
       - name: Package unsigned IPA for iLoader
+
         if: steps.voices.outputs.available == 'true'
+
         run: |
+
           mkdir -p build/Payload
+
           cp -R build/Build/Products/Release-iphoneos/VietVideoVoiceCheck.app build/Payload/
+
           cd build
+
           zip -qr VietVideo-iOS-1.0.4-unsigned.ipa Payload
+
       - name: Test voices, subtitles and local video export
+
         timeout-minutes: 20
+
         if: steps.voices.outputs.available == 'true'
+
         run: |
+
           set -o pipefail
+
           DEVICE=$(xcrun simctl list devices available -j | python3 -c 'import sys,json; print(next(d["udid"] for rows in json.load(sys.stdin)["devices"].values() for d in rows if d["name"].startswith("iPhone")))')
+
           xcodebuild -workspace VietVideoVoiceCheck.xcworkspace -scheme VietVideoVoiceCheck -destination "platform=iOS Simulator,id=$DEVICE" -derivedDataPath build/simulator -parallel-testing-enabled NO -resultBundlePath build/VoiceTests.xcresult CODE_SIGNING_ALLOWED=NO test | tee build/simulator-tests.log
+
       - name: Capture app appearance
+
         if: steps.voices.outputs.available == 'true'
+
         run: |
+
           DEVICE=$(xcrun simctl list devices available -j | python3 -c 'import sys,json; print(next(d["udid"] for rows in json.load(sys.stdin)["devices"].values() for d in rows if d["name"].startswith("iPhone")))')
+
           xcrun simctl boot "$DEVICE" || true
+
           xcrun simctl bootstatus "$DEVICE" -b
+
           xcrun simctl install "$DEVICE" build/simulator/Build/Products/Debug-iphonesimulator/VietVideoVoiceCheck.app
+
           xcrun simctl terminate "$DEVICE" vn.vietvideo.voicecheck || true
+
           xcrun simctl launch "$DEVICE" vn.vietvideo.voicecheck
+
           sleep 3
+
           xcrun simctl io "$DEVICE" screenshot build/studio.png
+
       - uses: actions/upload-artifact@v4
+
         if: success() && steps.voices.outputs.available == 'true'
+
         with:
+
           name: VietVideo-interface
+
           path: build/studio.png
+
           retention-days: 7
+
       - name: Summarize native test diagnostics
+
         if: always()
+
         run: |
+
           if [ -d build/VoiceTests.xcresult ]; then
+
             xcrun xcresulttool get test-results summary --path build/VoiceTests.xcresult > build/test-summary.json
+
             cat build/test-summary.json
+
           fi
+
       - uses: actions/upload-artifact@v4
+
         if: always()
+
         with:
+
           name: VietVideo-iOS-1.0.4
+
           path: |
+
             build/*.ipa
+
             build/*.log
+
             build/test-summary.json
+
           retention-days: 7
+
+
+
 
