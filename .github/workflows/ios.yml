@@ -22,7 +22,7 @@ jobs:
 
   build:
 
-    runs-on: macos-26
+    runs-on: macos-15-intel
 
     timeout-minutes: 60
 
@@ -30,6 +30,8 @@ jobs:
 
       - uses: actions/checkout@v4
 
+      - name: Select Xcode 26
+        run: sudo xcode-select --switch /Applications/Xcode_26.3.app/Contents/Developer
       - uses: actions/setup-python@v5
 
         with:
@@ -107,9 +109,10 @@ jobs:
             Assets/ThirdParty/sea-g2p-LICENSE.txt
 
           key: sea-g2p-macos26-${{ runner.arch }}-${{ hashFiles('Scripts/build_phonemizer.py') }}
+          restore-keys: sea-g2p-macos26-ARM64-099ca52a79e6976d8fe5acc2658c98231f0028899990776c1fe36e11d4f91a49
 
       - name: Build native Vietnamese phonemizer
-        timeout-minutes: 20
+        timeout-minutes: 30
 
         if: steps.phonemizer.outputs.cache-hit != 'true' 
 
