@@ -1,4 +1,4 @@
-# VietVideo iOS 1.0.6
+# VietVideo iOS 1.0.7
 
 Ứng dụng iPhone độc lập, giao diện Studio, Khám phá, Dự án và Cài đặt; biểu tượng ứng dụng riêng. Giữ bundle ID của bản thử để cập nhật bằng iLoader.
 
@@ -35,3 +35,7 @@ Trong Studio → Hình ảnh & phụ đề, bật Nền phụ đề rồi chọn
 ## Nhịp đọc tự nhiên 1.0.6
 
 Video lồng tiếng giữ tốc độ đọc gốc của cả bốn giọng, không ép nhanh 15% khi thiếu thời gian. Câu dài tự giãn đoạn hình và tiếng gốc như cơ chế hiện có để giữ đủ lời; video có thể dài hơn. Khâu ghép giọng WAV 48 kHz chạy thẳng ở tốc độ tự nhiên, không qua bộ đổi tốc độ. Giữ 80 ms đầu và 240 ms sau vùng thoại rõ để tránh mất phụ âm nhỏ ở cuối câu. Những câu đã tạo trước đây được tạo lại một lần khi xuất để áp dụng cách xử lý mới; bản video xuất cũ và các dự án vẫn giữ nguyên.
+
+## Tua video trong vùng che phụ đề 1.0.7
+
+Mở Hình ảnh & phụ đề → Chọn vùng chữ gốc / xem trước. Kéo thanh thời gian để chọn đoạn video hoặc dùng nút lùi/tiến 5 giây, sau đó kéo trên ảnh để khoanh vùng che. Vùng che giữ nguyên khi tua và áp dụng cho toàn bộ video. Nhấn Dùng vùng này để lưu. Các yêu cầu khung hình cũ được hủy khi đổi mốc hoặc đóng màn hình; chỉ khung hình mới nhất được hiển thị. Mốc cuối video được đưa về khung hình hợp lệ trước điểm kết thúc.

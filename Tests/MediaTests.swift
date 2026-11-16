@@ -4,7 +4,7 @@ import UIKit
 @testable import VietVideoVoiceCheck
 
 final class MediaTests: XCTestCase {
-    private func source(folder: URL, rotated: Bool) async throws -> URL {
+    private func source(folder: URL, rotated: Bool, splitColors: Bool = false) async throws -> URL {
         let silent = folder.appendingPathComponent("silent.mov")
         let writer = try AVAssetWriter(url: silent, fileType: .mov)
         let input = AVAssetWriterInput(mediaType: .video, outputSettings: [AVVideoCodecKey: AVVideoCodecType.h264,
@@ -24,7 +24,7 @@ final class MediaTests: XCTestCase {
             let buffer = try XCTUnwrap(pixel)
             CVPixelBufferLockBaseAddress(buffer, [])
             let context = try XCTUnwrap(CGContext(data: CVPixelBufferGetBaseAddress(buffer), width: 320, height: 180, bitsPerComponent: 8, bytesPerRow: CVPixelBufferGetBytesPerRow(buffer), space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.noneSkipFirst.rawValue))
-            context.setFillColor(UIColor.blue.cgColor); context.fill(CGRect(x: 0, y: 0, width: 320, height: 180))
+            context.setFillColor((splitColors && frame >= 24 ? UIColor.red : UIColor.blue).cgColor); context.fill(CGRect(x: 0, y: 0, width: 320, height: 180))
             CVPixelBufferUnlockBaseAddress(buffer, [])
             XCTAssertTrue(adaptor.append(buffer, withPresentationTime: CMTime(value: Int64(frame), timescale: 24)))
         }
@@ -110,6 +110,34 @@ final class MediaTests: XCTestCase {
             XCTAssertLessThan(try pixels(hidden, matching: rgb), 10)
             let foreground = color.usesDarkText ? 0.0 : 1.0
             XCTAssertGreaterThan(try pixels(visible, matching: [foreground, foreground, foreground]), 8)
+        }
+    }
+
+    func testMaskPreviewSeeksDifferentFramesAndKeepsPortraitOrientation() async throws {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let url = try await source(folder: folder, rotated: true, splitColors: true)
+        for (seconds, rgb) in [(0.2, [0.0, 0, 1]), (1.3, [1.0, 0, 0]), (-5.0, [0.0, 0, 1]), (2.0, [1.0, 0, 0])] {
+            let frame = try await MaskPreview.frame(url: url, seconds: seconds, duration: 2)
+            XCTAssertEqual(frame.image.width, 180)
+            XCTAssertEqual(frame.image.height, 320)
+            XCTAssertGreaterThan(try pixels(frame.image, matching: rgb), frame.image.width * frame.image.height * 8 / 10)
+            XCTAssertGreaterThanOrEqual(frame.time, 0)
+            XCTAssertLessThan(frame.time, 2)
+        }
+        let cancelled = Task.detached {
+            withUnsafeCurrentTask { $0?.cancel() }
+            return try await MaskPreview.frame(url: url, seconds: 1, duration: 2)
+        }
+        do { _ = try await cancelled.value; XCTFail("Cancelled preview must not replace the latest frame") }
+        catch is CancellationError {} catch { XCTFail("Unexpected cancellation error: \\(error)") }
+    }
+    func testMaskPreviewRejectsInvalidTimeBeforeReadingMedia() async {
+        let url = URL(fileURLWithPath: "/not-needed.mov")
+        for (seconds, duration) in [(Double.nan, 2.0), (Double.infinity, 2.0), (0.0, 0.0), (0.0, Double.nan)] {
+            do { _ = try await MaskPreview.frame(url: url, seconds: seconds, duration: duration); XCTFail("Invalid preview time accepted") }
+            catch { XCTAssertEqual(error.localizedDescription, "Mốc xem trước video không hợp lệ.") }
         }
     }
 

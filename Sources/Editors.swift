@@ -6,11 +6,19 @@ struct MaskEditor: View {
     @EnvironmentObject var store: ProjectStore
     @Environment(\.dismiss) private var dismiss
     @State private var image: UIImage?
+    @State private var position = 0.0
+    @State private var shownTime = 0.0
+    @State private var loading = false
+    @State private var previewError = ""
+    private var duration: Double {
+        let value = store.current?.duration ?? 0
+        return value.isFinite && value > 0 ? value : 0
+    }
     @State private var region = MaskRegion(x: 0.05, y: 0.78, width: 0.9, height: 0.14)
     var body: some View {
         NavigationStack {
-            VStack(spacing: 20) {
-                Text("Kéo trên ảnh để khoanh vùng chữ gốc cần làm mờ.").font(.callout).foregroundStyle(Palette.muted).padding(.horizontal)
+            VStack(spacing: 14) {
+                Text("Kéo thanh thời gian để tìm đoạn có chữ, rồi kéo trên ảnh để khoanh vùng cần che.").font(.callout).foregroundStyle(Palette.muted).padding(.horizontal)
                 GeometryReader { geometry in
                     if let image {
                         let ratio = image.size.width / image.size.height
@@ -29,24 +37,72 @@ struct MaskEditor: View {
                                 if selected.width > 0.01 && selected.height > 0.01 { region = selected }
                             })
                             .position(x: geometry.size.width / 2, y: geometry.size.height / 2)
-                    } else { ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity) }
+                            .overlay { if loading { ProgressView().tint(Palette.cyan).padding(12).background(Palette.panel, in: Circle()) } }
+                    } else {
+                        Group {
+                            if loading { ProgressView() }
+                            else { Image(systemName: "film").foregroundStyle(Palette.muted) }
+                        }.frame(maxWidth: .infinity, maxHeight: .infinity)
+                    }
+                }.padding(.horizontal)
+                VStack(spacing: 8) {
+                    HStack {
+                        Text(stamp(position))
+                        Spacer()
+                        Text(stamp(duration)).foregroundStyle(Palette.muted)
+                    }.font(.caption.monospacedDigit())
+                    Slider(value: $position, in: 0...max(0.001, duration))
+                        .accessibilityLabel("Vị trí video khi chọn vùng che")
+                        .accessibilityValue(stamp(position)).disabled(duration <= 0)
+                    HStack {
+                        Button { position = max(0, position - 5) } label: { Label("Lùi 5 giây", systemImage: "gobackward.5") }
+                        Spacer()
+                        Button { position = min(duration, position + 5) } label: { Label("Tiến 5 giây", systemImage: "goforward.5") }
+                    }.font(.callout).disabled(duration <= 0)
+                    if !previewError.isEmpty {
+                        Text(previewError).font(.footnote).foregroundStyle(.red)
+                    } else if image != nil {
+                        Text("Ảnh tại \(stamp(shownTime)). Vùng che áp dụng cho toàn bộ video.")
+                            .font(.footnote).foregroundStyle(Palette.muted)
+                    }
                 }.padding(.horizontal)
                 HStack {
                     Button("Vùng dưới") { region = MaskRegion(x: 0.05, y: 0.78, width: 0.9, height: 0.14) }.buttonStyle(.bordered)
-                    Button("Dùng vùng này") { store.settings.mask = region; store.saveDraft(); dismiss() }.buttonStyle(.borderedProminent).tint(Palette.cyan).foregroundStyle(Palette.background).disabled(image == nil)
+                    Button("Dùng vùng này") { store.settings.mask = region; store.saveDraft(); dismiss() }.buttonStyle(.borderedProminent).tint(Palette.cyan).foregroundStyle(Palette.background).disabled(image == nil || loading || !previewError.isEmpty)
                 }.padding(.bottom)
             }.background(Palette.background).navigationTitle("Vùng chữ gốc").navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Xong") { dismiss() } } }
-                .task {
+                .onAppear {
                     region = store.settings.mask ?? region
-                    guard let project = store.current else { return }
-                    let generator = AVAssetImageGenerator(asset: AVURLAsset(url: ProjectDisk.folder(project.id).appendingPathComponent(project.movieName)))
-                    generator.appliesPreferredTrackTransform = true; generator.maximumSize = CGSize(width: 1000, height: 1000)
-                    do { let result = try await generator.image(at: CMTime(seconds: min(1, project.duration / 2), preferredTimescale: 600)); image = UIImage(cgImage: result.image) }
-                    catch { store.status = "Không lấy được ảnh xem trước: \(error.localizedDescription)"; dismiss() }
+                    position = min(1, duration / 2)
                 }
+                .task(id: position) { await loadFrame() }
         }
     }
+    private func stamp(_ value: Double) -> String {
+        let seconds = max(0, Int(value))
+        return seconds >= 3600
+            ? String(format: "%d:%02d:%02d", seconds / 3600, seconds / 60 % 60, seconds % 60)
+            : String(format: "%02d:%02d", seconds / 60, seconds % 60)
+    }
+    @MainActor private func loadFrame() async {
+        guard let project = store.current else { return }
+        let requestedPosition = position
+        loading = true; previewError = ""
+        do {
+            try await Task.sleep(nanoseconds: 100_000_000)
+            let frame = try await MaskPreview.frame(url: ProjectDisk.folder(project.id).appendingPathComponent(project.movieName), seconds: requestedPosition, duration: project.duration)
+            try Task.checkCancellation()
+            guard store.current?.id == project.id, position == requestedPosition else { return }
+            image = UIImage(cgImage: frame.image)
+            shownTime = frame.time; loading = false
+        } catch {
+            guard !Task.isCancelled, store.current?.id == project.id, position == requestedPosition else { return }
+            loading = false
+            previewError = "Chưa lấy được ảnh ở mốc này. Hãy kéo sang đoạn khác: \(error.localizedDescription)"
+        }
+    }
+
 }
 
 struct DialogueEditor: View {
