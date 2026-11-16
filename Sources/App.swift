@@ -18,7 +18,7 @@ final class VoiceCheck: ObservableObject {
         player?.stop()
         output = nil
         busy = true
-        status = "Đang nạp bộ giọng gốc của VietVideo 4.4.4…"
+        status = "Đang nạp giọng đã chọn trên iPhone…"
         UIApplication.shared.isIdleTimerDisabled = true
         let started = Date()
         work = Task.detached(priority: .userInitiated) { [weak self] in
@@ -88,15 +88,15 @@ struct VoiceCheckView: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 24) {
                         Text("VietVideo trên iPhone").font(.largeTitle.bold())
-                        Text("Kiểm tra bộ giọng 4.4.4").font(.title2).foregroundStyle(.secondary)
-                        Text("Hai giọng chạy trực tiếp trên iPhone. Nghe câu mẫu rồi chọn giọng phù hợp trong mục lồng tiếng.")
+                        Text("Nghe thử giọng lồng tiếng").font(.title2).foregroundStyle(.secondary)
+                        Text("Bốn giọng chạy trực tiếp trên iPhone. Nghe câu mẫu rồi chọn giọng phù hợp trong mục lồng tiếng.")
                         Text("Câu mẫu: Xin chào, đây là giọng thuyết minh Việt Video.")
                             .padding().frame(maxWidth: .infinity, alignment: .leading)
                             .background(.blue.opacity(0.08), in: RoundedRectangle(cornerRadius: 18))
-                        Button("Tạo mẫu · Giọng thuyết minh gốc") { state.start(0) }
-                            .buttonStyle(.borderedProminent).disabled(state.busy || store.busy)
-                        Button("Tạo mẫu · Giọng giảm vọng 1") { state.start(1) }
-                            .buttonStyle(.borderedProminent).disabled(state.busy || store.busy)
+                        ForEach(VoicePresets.names.indices, id: \.self) { index in
+                            Button("Tạo mẫu · " + VoicePresets.names[index]) { state.start(index) }
+                                .buttonStyle(StudioButton()).disabled(state.busy || store.busy)
+                        }
                         if state.busy { ProgressView(); Button("Dừng") { state.stop() } }
                         Text(state.status).font(.callout).textSelection(.enabled)
                         if let output = state.output {

@@ -46,9 +46,12 @@ enum Dubbing {
 
     static func prepare(project: VideoProject, cues: [Subtitle], voice: Int, reduceHiss: Bool,
                         log: @Sendable (String) -> Void) throws -> DubTimeline {
-        guard (0...1).contains(voice) else { throw VoiceError.invalid("Chọn một trong hai giọng đã có.") }
+        guard VoicePresets.names.indices.contains(voice) else { throw VoiceError.invalid("Chọn một giọng có trong danh sách.") }
         guard let assets = Bundle.main.resourceURL?.appendingPathComponent("Assets") else { throw VoiceError.invalid("Thiếu bộ giọng.") }
-        let identity = Media.hash(try Data(contentsOf: assets.appendingPathComponent("Calibration/calibration.json")))
+        let calibrationData = try Data(contentsOf: assets.appendingPathComponent("Calibration/calibration.json"))
+        let calibration = try JSONDecoder().decode(Calibration.self, from: calibrationData)
+        guard calibration.voices.indices.contains(voice) else { throw VoiceError.invalid("Thiếu dữ liệu giọng đã chọn; hãy cài bản cập nhật đầy đủ.") }
+        let identity = calibration.voices[voice].identity ?? Media.hash(calibrationData)
         let folder = ProjectDisk.folder(project.id).appendingPathComponent("dub-voices", isDirectory: true)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         var engine: VoiceEngine?

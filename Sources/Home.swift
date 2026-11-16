@@ -65,7 +65,7 @@ struct StudioView: View {
                     }.padding(.vertical, 8)
                     HStack(spacing: 12) {
                         mode("Việt sub", subtitle: "Giữ tiếng gốc", icon: "captions.bubble.fill", dub: false)
-                        mode("Lồng tiếng", subtitle: "Hai giọng Việt", icon: "waveform", dub: true)
+                        mode("Lồng tiếng", subtitle: "Bốn giọng Việt", icon: "waveform", dub: true)
                     }.disabled(busy)
                     VStack(alignment: .leading, spacing: 16) {
                         Label("Nguồn video", systemImage: "film.stack").font(.headline)
@@ -188,7 +188,7 @@ struct StudioView: View {
     private var soundPanel: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack { Label("Giọng lồng tiếng", systemImage: "waveform").font(.headline); Spacer(); Button("Nghe mẫu") { player?.pause(); voiceSheet = true }.font(.callout) }
-            Picker("Chọn giọng", selection: $store.settings.voice) { Text("Giọng 1 · Mẫu ban đầu").tag(0); Text("Giọng 2 · Giảm vọng").tag(1) }.pickerStyle(.menu)
+            Picker("Chọn giọng", selection: $store.settings.voice) { ForEach(VoicePresets.names.indices, id: \.self) { index in Text(VoicePresets.names[index]).tag(index) } }.pickerStyle(.menu)
             Picker("Âm lượng tiếng gốc", selection: $store.settings.originalVolume) { ForEach([0,15,25,35,50,75,100], id: \.self) { Text("\($0)%").tag($0) } }
             Text("Mặc định 25%. Mức này giữ cố định từ đầu đến cuối, không tự to/nhỏ theo lời lồng tiếng.").font(.footnote).foregroundStyle(Palette.muted)
             Toggle("Kèm phụ đề Việt", isOn: $store.settings.burnSubtitles)

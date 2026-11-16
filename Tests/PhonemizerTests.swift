@@ -14,14 +14,14 @@ final class PhonemizerTests: XCTestCase {
         XCTAssertThrowsError(try frontend.phonemes("bad\0input"))
         XCTAssertThrowsError(try frontend.chunks("  "))
     }
-    func testNonDemoSentenceCanUseBothVoices() throws {
+    func testNonDemoSentenceCanUseAllVoices() throws {
         let root = Bundle(for: VoiceEngine.self).resourceURL!.appendingPathComponent("Assets")
         let frontend = try Phonemizer(root: root)
         let tokens = try frontend.tokens(for: frontend.phonemes("Mau đưa cô ấy ra ngoài."))
         let engine = try VoiceEngine(root: root)
         XCTAssertNotEqual(tokens, engine.calibration.tokens)
-        for voice in 0..<2 {
-            let audio = try engine.synthesize(voice: voice, tokens: tokens, maxFrames: 100, requireEnd: true, cancelled: { false }, progress: { _ in })
+        for voice in VoicePresets.names.indices {
+            let audio = try engine.synthesize(voice: voice, tokens: tokens, maxFrames: 180, requireEnd: true, cancelled: { false }, progress: { _ in })
             XCTAssertGreaterThan(audio.count, 4800)
             XCTAssertTrue(audio.allSatisfy(\.isFinite))
         }

@@ -3,7 +3,7 @@ import Accelerate
 import onnxruntime_objc
 
 struct Calibration: Decodable {
-    struct Voice: Decodable { let anchor: [Float]; let referenceCodes: [[Int64]] }
+    struct Voice: Decodable { let anchor: [Float]; let referenceCodes: [[Int64]]; let identity: String? }
     let sample: String
     let tokens: [Int64]
     let voices: [Voice]
@@ -31,7 +31,7 @@ final class VoiceEngine {
         calibration = try JSONDecoder().decode(Calibration.self, from: Data(contentsOf: calibrationRoot.appendingPathComponent("calibration.json")))
         let c = calibration
         guard c.hidden > 0, c.channels > 0, c.layers > 0, c.localLayers > 0,
-              c.localHeads * c.localHeadSize == c.hidden, c.voices.count == 2,
+              c.localHeads * c.localHeadSize == c.hidden, c.voices.count == VoicePresets.names.count,
               c.voices.allSatisfy({ $0.anchor.count == c.hidden && $0.referenceCodes.allSatisfy({ $0.count == c.channels }) })
         else { throw VoiceError.invalid("Dữ liệu giọng không hợp lệ.") }
         textWeights = try Self.readFloats(calibrationRoot.appendingPathComponent("text.f32"))

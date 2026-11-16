@@ -29,6 +29,9 @@ final class DubbingTests: XCTestCase {
         let settings = ExportSettings()
         XCTAssertEqual(settings.originalVolume, 25)
         try settings.validate()
+        for index in VoicePresets.names.indices { var chosen = settings; chosen.voice = index; try chosen.validate() }
+        var invalidVoice = settings; invalidVoice.voice = VoicePresets.names.count
+        XCTAssertThrowsError(try invalidVoice.validate())
         for level in [0,15,25,35,50,75,100] { var chosen = settings; chosen.originalVolume = level; try chosen.validate() }
         var bad = settings; bad.originalVolume = 20; XCTAssertThrowsError(try bad.validate())
         bad = settings; bad.mask = MaskRegion(x: 0.8, y: 0.8, width: 0.3, height: 0.1); XCTAssertThrowsError(try bad.validate())

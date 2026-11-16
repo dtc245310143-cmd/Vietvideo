@@ -36,8 +36,8 @@ struct SettingsView: View {
                     Link("Lấy Gemini API key", destination: URL(string: "https://aistudio.google.com/apikey")!)
                 }.disabled(store.busy || voices.busy)
                 Section { Text(store.status) }
-                Section("VietVideo 1.0.3") {
-                    Text("Hai giọng chạy trực tiếp trên iPhone. Nhận diện/dịch dùng Gemini; tải video có thể yêu cầu đăng nhập nguồn.")
+                Section("VietVideo 1.0.4") {
+                    Text("Bốn giọng chạy trực tiếp trên iPhone. Nhận diện/dịch dùng Gemini; tải video có thể yêu cầu đăng nhập nguồn.")
                 }
                 Section("Lưu dữ liệu") {
                     Text("Dự án và video nằm trong Tệp → Trên iPhone → VietVideo. Dùng Chia sẻ video để chọn nơi lưu. API key nằm trong Keychain, không đi vào mã nguồn GitHub.")

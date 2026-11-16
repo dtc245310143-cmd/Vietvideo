@@ -102,7 +102,7 @@ struct ExportSettings: Codable, Equatable {
     var logoWidth = 15.0
 
     func validate() throws {
-        guard [0,15,25,35,50,75,100].contains(originalVolume), [0,1].contains(voice),
+        guard [0,15,25,35,50,75,100].contains(originalVolume), VoicePresets.names.indices.contains(voice),
               [26.0,30,36].contains(size), mask?.valid != false, blurStrength.isFinite, (5...40).contains(blurStrength),
               logoWidth.isFinite, (5...30).contains(logoWidth), ["topLeft","topRight","bottomLeft","bottomRight"].contains(logoCorner),
               logoName == nil || logoName == "channel-logo.png" else { throw AppError.message("Tùy chỉnh xuất video không hợp lệ.") }
