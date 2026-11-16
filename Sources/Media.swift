@@ -120,7 +120,7 @@ enum Media {
             try track.insertTimeRange(CMTimeRange(start: .zero, duration: length), of: source, at: .zero)
             voiceTrack = track
         }
-        log("Đang xuất hình ảnh và ghép tiếng gốc với giọng Việt…")
+        log(timeline == nil ? "Đang xuất hình ảnh và phụ đề Việt…" : "Đang xuất hình ảnh và ghép tiếng gốc với giọng Việt…")
         let transform = try await sourceVideo.load(.preferredTransform)
         let naturalSize = try await sourceVideo.load(.naturalSize)
         let bounds = CGRect(origin: .zero, size: naturalSize).applying(transform)
@@ -130,6 +130,7 @@ enum Media {
         let outputCues = timeline?.plans.map(\.cue) ?? cues
         let captions = try CaptionRenderer(cues: style.burnSubtitles ? outputCues : [], style: style)
         let renderContext = CIContext(options: [.cacheIntermediates: false])
+        defer { renderContext.clearCaches() }
         let base = AVVideoComposition(asset: composition, applyingCIFiltersWithHandler: { request in
             autoreleasepool {
                 do {

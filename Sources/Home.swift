@@ -152,14 +152,17 @@ struct StudioView: View {
                 }
                 .onChange(of: store.draft) { _ in store.scheduleSave(); srtShare = nil }
                 .onChange(of: store.settings) { _ in store.scheduleSave() }
-                .task(id: store.current?.id) {
-                    player?.pause()
-                    if let project = store.current { player = AVPlayer(url: ProjectDisk.folder(project.id).appendingPathComponent(project.movieName)) }
-                    else { player = nil }
-                }
+                .task(id: store.current?.id) { refreshPreview() }
+                .onChange(of: store.busy) { _ in refreshPreview() }
                 .sheet(isPresented: $maskSheet) { MaskEditor() }
                 .sheet(isPresented: $dialogueSheet) { DialogueEditor() }
                 .sheet(isPresented: $voiceSheet) { VoiceCheckView() }
+        }
+    }
+    private func refreshPreview() {
+        player?.pause(); player = nil
+        if !store.busy, let project = store.current {
+            player = AVPlayer(url: ProjectDisk.folder(project.id).appendingPathComponent(project.movieName))
         }
     }
     private func sourceAction(_ title: String, _ symbol: String) -> some View {
