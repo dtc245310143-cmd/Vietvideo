@@ -111,10 +111,11 @@ jobs:
           key: sea-g2p-macos26-${{ runner.arch }}-${{ hashFiles('Scripts/build_phonemizer.py') }}
 
       - name: Build native Vietnamese phonemizer
+        timeout-minutes: 20
 
         if: steps.phonemizer.outputs.cache-hit != 'true' 
 
-        run: python3 Scripts/build_phonemizer.py
+        run: python3 -u Scripts/build_phonemizer.py
 
       - name: Create Xcode project
 

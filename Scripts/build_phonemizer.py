@@ -4,13 +4,25 @@ import shutil
 import subprocess
 import urllib.request
 import zipfile
+import platform
+import time
 
 ROOT = Path(__file__).resolve().parents[1]
 REVISION = 'e825173f235d08ea19315b2b279fb11153b44cea'
 vendor = ROOT / 'Vendor'
 vendor.mkdir(exist_ok=True)
 archive = vendor / 'sea-source.zip'
-urllib.request.urlretrieve(f'https://github.com/pnnbao97/sea-g2p/archive/{REVISION}.zip', archive)
+for attempt in range(3):
+    try:
+        print(f"Fetching pinned phonemizer source (attempt {attempt + 1})", flush=True)
+        with urllib.request.urlopen(f'https://codeload.github.com/pnnbao97/sea-g2p/zip/{REVISION}', timeout=90) as response:
+            with archive.open('wb') as target:
+                shutil.copyfileobj(response, target)
+        break
+    except (OSError, TimeoutError):
+        if attempt == 2:
+            raise
+        time.sleep(3)
 with zipfile.ZipFile(archive) as z:
     for item in z.infolist():
         target = (vendor / item.filename).resolve()
@@ -19,20 +31,18 @@ with zipfile.ZipFile(archive) as z:
 source = vendor / f'sea-g2p-{REVISION}'
 cargo = source / 'Cargo.toml'
 cargo.write_text(cargo.read_text().replace('["cdylib", "rlib"]', '["staticlib"]'))
-targets = ['aarch64-apple-ios', 'aarch64-apple-ios-sim', 'x86_64-apple-ios']
+simulator_target = 'x86_64-apple-ios' if platform.machine() == 'x86_64' else 'aarch64-apple-ios-sim'
+targets = ['aarch64-apple-ios', simulator_target]
 subprocess.run(['rustup', 'target', 'add', *targets], check=True)
 for target in targets:
+    print(f'Building phonemizer: {target}', flush=True)
     subprocess.run(['cargo', 'build', '--release', '--locked', '--no-default-features', '--features', 'capi', '--target', target], cwd=source, check=True)
 output = vendor / 'SeaG2P.xcframework'
 if output.exists(): shutil.rmtree(output)
-device = source / 'target/aarch64-apple-ios/release/libsea_g2p_rs.a'
-simulator = vendor / 'libsea_g2p_simulator.a'
-subprocess.run(['lipo', '-create',
-                str(source / 'target/aarch64-apple-ios-sim/release/libsea_g2p_rs.a'),
-                str(source / 'target/x86_64-apple-ios/release/libsea_g2p_rs.a'),
-                '-output', str(simulator)], check=True)
-subprocess.run(['xcodebuild', '-create-xcframework', '-library', str(device),
-                '-library', str(simulator), '-output', str(output)], check=True)
+args = ['xcodebuild', '-create-xcframework']
+for target in targets:
+    args += ['-library', str(source / 'target' / target / 'release/libsea_g2p_rs.a')]
+subprocess.run([*args, '-output', str(output)], check=True)
 licenses = ROOT / 'Assets/ThirdParty'
 licenses.mkdir(exist_ok=True)
 shutil.copy2(source / 'LICENSE', licenses / 'sea-g2p-LICENSE.txt')
