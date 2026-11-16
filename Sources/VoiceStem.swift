@@ -48,6 +48,22 @@ enum VoiceStem {
             progress(index + 1, timeline.plans.count)
             try autoreleasepool {
                 // Local WAV metadata is loaded on the worker so each reader closes before the next clip.
+                if plan.speed == 1 {
+                    let audio = try AVAudioFile(forReading: plan.file)
+                    let source = audio.processingFormat
+                    if source.sampleRate == rate, source.channelCount == 1,
+                       source.commonFormat == .pcmFormatFloat32, !source.isInterleaved {
+                        // Keep natural-speed speech bit-for-bit; no time-pitch processor is needed.
+                        while position < end {
+                            try Task.checkCancellation()
+                            try audio.read(into: buffer, frameCount: AVAudioFrameCount(min(4096, end - position)))
+                            guard buffer.frameLength > 0 else { throw AppError.message("Tệp giọng kết thúc sớm; dừng để tránh mất lời.") }
+                            try writer.write(from: buffer)
+                            position += Int64(buffer.frameLength)
+                        }
+                        return
+                    }
+                }
                 let asset = AVURLAsset(url: plan.file)
                 guard let source = asset.tracks(withMediaType: .audio).first else { throw AppError.message("Không đọc được tệp giọng câu \(index + 1).") }
                 let composition = AVMutableComposition()

@@ -150,7 +150,7 @@ jobs:
 
           cd build
 
-          zip -qr VietVideo-iOS-1.0.5-unsigned.ipa Payload
+          zip -qr VietVideo-iOS-1.0.6-unsigned.ipa Payload
 
       - name: Test voices, subtitles and local video export
 
@@ -226,7 +226,7 @@ jobs:
 
         with:
 
-          name: VietVideo-iOS-1.0.5
+          name: VietVideo-iOS-1.0.6
 
           path: |
 

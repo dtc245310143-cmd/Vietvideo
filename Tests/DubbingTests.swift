@@ -9,10 +9,38 @@ final class DubbingTests: XCTestCase {
         XCTAssertEqual(timeline.plans.map { $0.cue.text }, cues.map(\.text))
         XCTAssertEqual(timeline.stretches.count, 1)
         XCTAssertGreaterThan(timeline.duration, 2)
-        XCTAssertLessThanOrEqual(timeline.plans[0].speed, 1.15)
+        XCTAssertEqual(timeline.plans[0].speed, 1)
         XCTAssertLessThanOrEqual(timeline.plans[0].seconds / timeline.plans[0].speed, timeline.plans[0].cue.end - timeline.plans[0].cue.start)
         XCTAssertLessThan(timeline.plans[0].cue.end, timeline.plans[1].cue.start)
         XCTAssertEqual(timeline.plans[1].cue.start - cues[1].start, timeline.duration - 2, accuracy: 0.0001)
+    }
+    func testSmallOverrunsStretchPicturesInsteadOfRushingSpeech() throws {
+        let cues = [Subtitle(start: 0.2, end: 0.8, text: "Câu một"), Subtitle(start: 1, end: 1.5, text: "Câu hai")]
+        let files = [URL(fileURLWithPath: "/one.wav"), URL(fileURLWithPath: "/two.wav")]
+        let timeline = try Dubbing.schedule(cues, files: files, seconds: [0.75, 0.3], duration: 2)
+        XCTAssertEqual(timeline.plans.map(\.speed), [1, 1])
+        XCTAssertEqual(timeline.stretches.count, 1)
+        XCTAssertGreaterThan(timeline.duration, 2)
+        XCTAssertGreaterThanOrEqual(timeline.plans[0].cue.end - timeline.plans[0].cue.start, 0.75)
+        XCTAssertLessThan(timeline.plans[0].cue.end, timeline.plans[1].cue.start)
+        let short = try Dubbing.schedule(cues, files: files, seconds: [0.3, 0.3], duration: 2)
+        XCTAssertEqual(short.plans.map(\.speed), [1, 1])
+        XCTAssertTrue(short.stretches.isEmpty)
+        XCTAssertEqual(short.duration, 2)
+    }
+    func testQuietFinalConsonantsSurviveCleanup() {
+        var input = [Float](repeating: 0, count: 4800)
+        input += (0..<24000).map { Float(sin(Double($0) * 2 * .pi * 180 / 48000) * 0.5) }
+        input += (0..<8640).map { Float(sin(Double($0) * 2 * .pi * 3000 / 48000) * 0.002) }
+        input += [Float](repeating: 0, count: 24000)
+        for reduceHiss in [false, true] {
+            let output = Dubbing.clean(input, reduceHiss: reduceHiss)
+            guard output.count >= 35520 else { XCTFail("Quiet speech ending was cut"); continue }
+            let tail = output[29760..<35520]
+            let rms = sqrt(tail.reduce(Float(0)) { $0 + $1 * $1 } / Float(tail.count))
+            XCTAssertGreaterThan(rms, 0.0008, "Quiet final consonants must remain audible")
+            XCTAssertLessThan(output.count, input.count)
+        }
     }
     func testCleanupBoundsSamplesAndKeepsAudibleSpeech() {
         var samples = [Float](repeating: 0, count: 9600)

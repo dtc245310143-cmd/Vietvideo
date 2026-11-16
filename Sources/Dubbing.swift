@@ -29,17 +29,15 @@ enum Dubbing {
             let available = deadline - source.start
             var cue = source
             cue.start += offset
-            let speed: Double
-            if seconds[i] > available * 1.15 {
-                let length = seconds[i] / 1.15 + 0.05
+            if seconds[i] > available {
+                let length = seconds[i] + 0.02
                 stretches.append(Stretch(start: source.start, end: deadline, factor: length / available))
-                cue.end = cue.start + length; speed = 1.15
+                cue.end = cue.start + length
                 offset += length - available
             } else {
-                cue.end = max(source.end, min(source.start + seconds[i], deadline)) + offset
-                speed = max(1, seconds[i] / (cue.end - cue.start))
+                cue.end = max(source.end, source.start + seconds[i]) + offset
             }
-            plans.append(VoicePlan(cue: cue, file: files[i], seconds: seconds[i], speed: min(1.15, speed)))
+            plans.append(VoicePlan(cue: cue, file: files[i], seconds: seconds[i], speed: 1))
         }
         return DubTimeline(plans: plans, stretches: stretches, duration: duration + offset)
     }
@@ -59,7 +57,7 @@ enum Dubbing {
         var files: [URL] = [], durations: [Double] = []
         for (i, cue) in cues.enumerated() {
             try Task.checkCancellation()
-            let tag = Media.hash(Data("native-voice-v1|\(identity)|\(voice)|\(reduceHiss)|\(cue.text)".utf8))
+            let tag = Media.hash(Data("native-voice-v2|\(identity)|\(voice)|\(reduceHiss)|\(cue.text)".utf8))
             let file = folder.appendingPathComponent(tag).appendingPathExtension("wav")
             if !FileManager.default.fileExists(atPath: file.path) {
                 if engine == nil { log("Đang nạp giọng trên iPhone…"); engine = try VoiceEngine(root: assets); frontend = try Phonemizer(root: assets) }
@@ -116,7 +114,7 @@ enum Dubbing {
             if rms > 0.004 { if first == nil { first = offset }; last = end }
         }
         guard let first, let last else { return [] }
-        var trimmed = Array(values[max(0, first - 2880)..<min(values.count, last + 4800)])
+        var trimmed = Array(values[max(0, first - 3840)..<min(values.count, last + 11520)])
         let fade = min(240, trimmed.count / 2)
         if fade > 1 { for i in 0..<fade { let gain = Float(i) / Float(fade - 1); trimmed[i] *= gain; trimmed[trimmed.count - 1 - i] *= gain } }
         return trimmed

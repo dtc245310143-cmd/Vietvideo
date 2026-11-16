@@ -1,4 +1,4 @@
-# VietVideo iOS 1.0.5
+# VietVideo iOS 1.0.6
 
 Ứng dụng iPhone độc lập, giao diện Studio, Khám phá, Dự án và Cài đặt; biểu tượng ứng dụng riêng. Giữ bundle ID của bản thử để cập nhật bằng iLoader.
 
@@ -31,3 +31,7 @@ Mã nền theo GPL-3.0 (`LICENSE`). ONNX Runtime và YouTubeKit theo giấy phé
 ## Nền phụ đề 1.0.5
 
 Trong Studio → Hình ảnh & phụ đề, bật Nền phụ đề rồi chọn Vàng, Đen hoặc Màu khác. Nền bo góc ôm theo câu; chữ tự chuyển đen/trắng để dễ đọc. Có xem trước và lưu màu theo dự án. Tắt Nền phụ đề để dùng kiểu chữ cũ. Giọng 3–4 đã thay bằng hai mẫu MP3 sửa lần 1 được người dùng duyệt. Hồ sơ giữ đoạn giọng tham chiếu và dùng phép chiếu Linear + LayerNorm đầy đủ, khớp bộ tạo bản MP3. Giọng 1–2 và âm thanh đã tạo bằng hai giọng cũ được giữ nguyên.
+
+## Nhịp đọc tự nhiên 1.0.6
+
+Video lồng tiếng giữ tốc độ đọc gốc của cả bốn giọng, không ép nhanh 15% khi thiếu thời gian. Câu dài tự giãn đoạn hình và tiếng gốc như cơ chế hiện có để giữ đủ lời; video có thể dài hơn. Khâu ghép giọng WAV 48 kHz chạy thẳng ở tốc độ tự nhiên, không qua bộ đổi tốc độ. Giữ 80 ms đầu và 240 ms sau vùng thoại rõ để tránh mất phụ âm nhỏ ở cuối câu. Những câu đã tạo trước đây được tạo lại một lần khi xuất để áp dụng cách xử lý mới; bản video xuất cũ và các dự án vẫn giữ nguyên.

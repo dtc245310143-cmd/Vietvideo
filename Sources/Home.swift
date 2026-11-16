@@ -194,7 +194,7 @@ struct StudioView: View {
             Text("Mặc định 25%. Mức này giữ cố định từ đầu đến cuối, không tự to/nhỏ theo lời lồng tiếng.").font(.footnote).foregroundStyle(Palette.muted)
             Toggle("Kèm phụ đề Việt", isOn: $store.settings.burnSubtitles)
             Toggle("Giảm rè nhẹ cho giọng Việt", isOn: $store.settings.reduceHiss)
-            Text("Câu dài được tự căn hình và tiếng, giữ cao độ và đủ lời.").font(.footnote).foregroundStyle(Palette.muted)
+            Text("Giọng giữ tốc độ tự nhiên, không đọc gấp để khớp hình. Câu dài sẽ tự giãn đoạn video để giữ đủ lời.").font(.footnote).foregroundStyle(Palette.muted)
         }.studioPanel().disabled(busy)
     }
     private var subtitleForeground: Color {
