@@ -23,10 +23,12 @@ final class VoiceCheck: ObservableObject {
         let started = Date()
         work = Task.detached(priority: .userInitiated) { [weak self] in
             do {
-                let engine = try VoiceEngine(root: root)
-                let samples = try engine.synthesize(voice: voice, cancelled: { Task.isCancelled }) { frame in
-                    if frame % 10 == 0 {
-                        Task { @MainActor [weak self] in self?.status = "Đang tạo giọng \(voice + 1) · \(frame) khung âm thanh…" }
+                let samples = try autoreleasepool {
+                    let engine = try VoiceEngine(root: root)
+                    return try engine.synthesize(voice: voice, cancelled: { Task.isCancelled }) { frame in
+                        if frame % 10 == 0 {
+                            Task { @MainActor [weak self] in self?.status = "Đang tạo giọng \(voice + 1) · \(frame) khung âm thanh…" }
+                        }
                     }
                 }
                 try Task.checkCancellation()

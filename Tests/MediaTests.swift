@@ -192,3 +192,68 @@ extension MediaTests {
     }
 }
 
+
+extension MediaTests {
+    func testSixtyFourDistinctVoicesExportAndCancelWithoutLeftoverMixes() async throws {
+        let id = UUID(), folder = ProjectDisk.folder(id)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? ProjectDisk.remove(id) }
+        let short = try await source(folder: folder, rotated: false)
+        let asset = AVURLAsset(url: short)
+        let images = try await asset.loadTracks(withMediaType: .video)
+        let sounds = try await asset.loadTracks(withMediaType: .audio)
+        let image = try XCTUnwrap(images.first), sound = try XCTUnwrap(sounds.first)
+        let composition = AVMutableComposition()
+        let video = try XCTUnwrap(composition.addMutableTrack(withMediaType: .video, preferredTrackID: kCMPersistentTrackID_Invalid))
+        let audio = try XCTUnwrap(composition.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid))
+        let range = CMTimeRange(start: .zero, duration: CMTime(seconds: 2, preferredTimescale: 48000))
+        for i in 0..<64 {
+            let start = CMTime(seconds: Double(i) * 2, preferredTimescale: 48000)
+            try video.insertTimeRange(range, of: image, at: start)
+            try audio.insertTimeRange(range, of: sound, at: start)
+        }
+        let long = folder.appendingPathComponent("long.mov")
+        let exporter = try XCTUnwrap(AVAssetExportSession(asset: composition, presetName: AVAssetExportPresetPassthrough))
+        exporter.outputURL = long; exporter.outputFileType = .mov
+        await exporter.export()
+        XCTAssertEqual(exporter.status, .completed)
+        var cues: [Subtitle] = [], files: [URL] = []
+        let step = 2.0 * Double.pi * 880.0 / 48000.0
+        let samples: [Float] = (0..<38400).map { Float(sin(Double($0) * step) * 0.4) }
+        for i in 0..<64 {
+            let file = folder.appendingPathComponent("voice-\(i).wav")
+            try autoreleasepool { try Dubbing.write(samples, to: file) }
+            files.append(file)
+            cues.append(Subtitle(start: Double(i) * 2 + 0.25, end: Double(i) * 2 + 1.2, text: "Đoạn \(i + 1)"))
+        }
+        let timeline = try Dubbing.schedule(cues, files: files, seconds: [Double](repeating: 0.8, count: 64), duration: 128)
+        let project = VideoProject(id: id, title: "64 voices", duration: 128, movieName: long.lastPathComponent)
+        let output = try await Media.export(project, cues: cues, style: CaptionStyle(), timeline: timeline, originalVolume: 25)
+        let duration = try await Media.duration(output)
+        XCTAssertEqual(duration, 128, accuracy: 0.1)
+        for index in [0, 31, 63] {
+            let clip = try await Media.audio(output, start: cues[index].start + 0.2, length: 0.2)
+            XCTAssertGreaterThan(tone(clip, frequency: 880), 0.2, "Missing voice \(index + 1)")
+            XCTAssertEqual(tone(clip, frequency: 440), 0.0625, accuracy: 0.02)
+        }
+        let gap = try await Media.audio(output, start: 125.5, length: 0.2)
+        XCTAssertLessThan(tone(gap, frequency: 880), 0.03)
+        XCTAssertEqual(tone(gap, frequency: 440), 0.0625, accuracy: 0.02)
+        let generator = AVAssetImageGenerator(asset: AVURLAsset(url: output))
+        let frame = try await generator.image(at: CMTime(seconds: 126.75, preferredTimescale: 600))
+        XCTAssertGreaterThan(try whitePixels(frame.image), 20)
+        XCTAssertFalse(try FileManager.default.contentsOfDirectory(atPath: folder.path).contains { $0.hasPrefix("voice-mix-") })
+        let hash = Media.hash(try Data(contentsOf: output))
+        let cancelled = Task.detached {
+            try VoiceStem.create(timeline, folder: folder) { index, _ in
+                if index == 3 { withUnsafeCurrentTask { $0?.cancel() } }
+            }
+        }
+        do { _ = try await cancelled.value; XCTFail("Cancelled stem should not complete") }
+        catch is CancellationError {} catch { XCTFail("Unexpected error: \(error)") }
+        XCTAssertFalse(try FileManager.default.contentsOfDirectory(atPath: folder.path).contains { $0.hasPrefix("voice-mix-") })
+        XCTAssertEqual(Media.hash(try Data(contentsOf: output)), hash)
+        XCTAssertTrue(files.allSatisfy { FileManager.default.fileExists(atPath: $0.path) })
+    }
+}
+

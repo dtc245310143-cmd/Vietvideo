@@ -75,7 +75,7 @@ enum Media {
 
     static func hash(_ data: Data) -> String { SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined() }
 
-    static func export(_ project: VideoProject, cues: [Subtitle], style: CaptionStyle, timeline: DubTimeline? = nil, originalVolume: Int = 100) async throws -> URL {
+    static func export(_ project: VideoProject, cues: [Subtitle], style: CaptionStyle, timeline: DubTimeline? = nil, originalVolume: Int = 100, log: @Sendable @escaping (String) -> Void = { _ in }) async throws -> URL {
         try Task.checkCancellation()
         guard !cues.isEmpty else { throw AppError.message("Chưa có phụ đề để chèn vào video.") }
         try SRT.validate(cues, duration: project.duration)
@@ -102,20 +102,25 @@ enum Media {
                 composition.scaleTimeRange(CMTimeRange(start: CMTime(seconds: change.start, preferredTimescale: 48000), duration: CMTime(seconds: change.end - change.start, preferredTimescale: 48000)), toDuration: CMTime(seconds: (change.end - change.start) * change.factor, preferredTimescale: 48000))
             }
         }
+        var stem: URL?
+        defer { if let stem { try? FileManager.default.removeItem(at: stem) } }
         var voiceTrack: AVMutableCompositionTrack?
         if let timeline {
-            voiceTrack = composition.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid)
-            guard let voiceTrack else { throw AppError.message("Không tạo được luồng lồng tiếng.") }
-            for plan in timeline.plans {
-                try Task.checkCancellation()
-                let clip = AVURLAsset(url: plan.file)
-                guard let track = try await clip.loadTracks(withMediaType: .audio).first else { throw AppError.message("Tệp giọng bị hỏng.") }
-                let range = CMTimeRange(start: .zero, duration: CMTime(seconds: plan.seconds, preferredTimescale: 48000))
-                let start = CMTime(seconds: plan.cue.start, preferredTimescale: 48000)
-                try voiceTrack.insertTimeRange(range, of: track, at: start)
-                voiceTrack.scaleTimeRange(CMTimeRange(start: start, duration: range.duration), toDuration: CMTime(seconds: plan.seconds / plan.speed, preferredTimescale: 48000))
+            let work = Task.detached {
+                try VoiceStem.create(timeline, folder: folder) { index, count in
+                    log("Chuẩn bị âm thanh: câu \(index)/\(count)…")
+                }
             }
+            stem = try await withTaskCancellationHandler(operation: { try await work.value }, onCancel: { work.cancel() })
+            try Task.checkCancellation()
+            let sound = AVURLAsset(url: stem!)
+            guard let source = try await sound.loadTracks(withMediaType: .audio).first,
+                  let track = composition.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid) else { throw AppError.message("Không tạo được luồng lồng tiếng.") }
+            let length = CMTimeMinimum(composition.duration, try await sound.load(.duration))
+            try track.insertTimeRange(CMTimeRange(start: .zero, duration: length), of: source, at: .zero)
+            voiceTrack = track
         }
+        log("Đang xuất hình ảnh và ghép tiếng gốc với giọng Việt…")
         let transform = try await sourceVideo.load(.preferredTransform)
         let naturalSize = try await sourceVideo.load(.naturalSize)
         let bounds = CGRect(origin: .zero, size: naturalSize).applying(transform)
@@ -124,11 +129,14 @@ enum Media {
         video.preferredTransform = transform
         let outputCues = timeline?.plans.map(\.cue) ?? cues
         let captions = try CaptionRenderer(cues: style.burnSubtitles ? outputCues : [], style: style)
+        let renderContext = CIContext(options: [.cacheIntermediates: false])
         let base = AVVideoComposition(asset: composition, applyingCIFiltersWithHandler: { request in
-            do {
-                let image = try captions.apply(to: request.sourceImage, at: request.compositionTime.seconds)
-                request.finish(with: image, context: nil)
-            } catch { request.finish(with: error) }
+            autoreleasepool {
+                do {
+                    let image = try captions.apply(to: request.sourceImage, at: request.compositionTime.seconds)
+                    request.finish(with: image, context: renderContext)
+                } catch { request.finish(with: error) }
+            }
         })
         let videoComposition = base.mutableCopy() as! AVMutableVideoComposition
         videoComposition.renderSize = size

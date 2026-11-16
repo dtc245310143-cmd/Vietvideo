@@ -185,6 +185,11 @@ final class VoiceEngine {
     }
 
     func synthesize(voice: Int, tokens inputTokens: [Int64]? = nil, maxFrames: Int = 180, requireEnd: Bool = false, cancelled: () -> Bool, progress: (Int) -> Void) throws -> [Float] {
+        try autoreleasepool {
+            try synthesizeBuffers(voice: voice, tokens: inputTokens, maxFrames: maxFrames, requireEnd: requireEnd, cancelled: cancelled, progress: progress)
+        }
+    }
+    private func synthesizeBuffers(voice: Int, tokens inputTokens: [Int64]?, maxFrames: Int, requireEnd: Bool, cancelled: () -> Bool, progress: (Int) -> Void) throws -> [Float] {
         let c = calibration
         guard c.voices.indices.contains(voice), maxFrames > 0, maxFrames <= 300 else {
             throw VoiceError.invalid("Chọn giọng hoặc độ dài không hợp lệ.")

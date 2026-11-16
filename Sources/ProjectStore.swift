@@ -222,7 +222,9 @@ final class ProjectStore: ObservableObject {
             let timeline: DubTimeline?
             if chosen.dub {
                 let work = Task.detached {
-                    try Dubbing.prepare(project: initial, cues: cues, voice: chosen.voice, reduceHiss: chosen.reduceHiss, log: self.log)
+                    try autoreleasepool {
+                        try Dubbing.prepare(project: initial, cues: cues, voice: chosen.voice, reduceHiss: chosen.reduceHiss, log: self.log)
+                    }
                 }
                 timeline = try await withTaskCancellationHandler(operation: { try await work.value }, onCancel: { work.cancel() })
             } else { timeline = nil }
@@ -233,7 +235,7 @@ final class ProjectStore: ObservableObject {
             render.logo = chosen.logoName.map { ProjectDisk.folder(initial.id).appendingPathComponent($0) }
             render.logoCorner = chosen.logoCorner; render.logoWidth = chosen.logoWidth
             status = chosen.dub ? "Đang xuất lồng tiếng, tiếng gốc cố định \(chosen.originalVolume)% và tùy chọn phụ đề…" : "Đang xuất Việt sub, giữ tiếng gốc…"
-            let url = try await Media.export(initial, cues: cues, style: render, timeline: timeline, originalVolume: chosen.dub ? chosen.originalVolume : 100)
+            let url = try await Media.export(initial, cues: cues, style: render, timeline: timeline, originalVolume: chosen.dub ? chosen.originalVolume : 100, log: log)
             if let timeline { try Data(SRT.encode(timeline.plans.map(\.cue)).utf8).write(to: ProjectDisk.folder(initial.id).appendingPathComponent("vi-dub.srt"), options: .atomic) }
             var project = initial; project.outputName = url.lastPathComponent; project.settings = chosen
             try update(project); output = url
