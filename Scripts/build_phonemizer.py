@@ -31,3 +31,4 @@ subprocess.run([*args, '-output', str(output)], check=True)
 licenses = ROOT / 'Assets/ThirdParty'
 licenses.mkdir(exist_ok=True)
 shutil.copy2(source / 'LICENSE', licenses / 'sea-g2p-LICENSE.txt')
+
